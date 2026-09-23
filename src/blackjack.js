@@ -5,7 +5,7 @@
 // blackjack paga 3:2, se puede doblar con las dos primeras cartas y dividir
 // una vez (los ases divididos reciben una sola carta).
 //
-// Fases: waiting -> betting -> playing -> dealer -> settled -> waiting ...
+// Fases: waiting -> betting -> dealing -> playing -> dealer -> settled -> waiting ...
 
 const crypto = require('node:crypto');
 const wallet = require('./wallet');
@@ -17,6 +17,7 @@ const RESHUFFLE_AT = Math.floor(DECKS * 52 * 0.25);
 const MIN_BET = 1;
 const MAX_BET = 500;
 const BETTING_MS = 15_000;
+const DEAL_STEP_MS = 450;
 const TURN_MS = 20_000;
 const DEALER_STEP_MS = 800;
 const RESULT_MS = 6_000;
@@ -219,11 +220,28 @@ class BlackjackTable {
       s.hands = [newHand([], s.bet)];
       s.activeHand = 0;
     }
+
+    // Se reparte carta a carta, como en una mesa real: una a cada jugador,
+    // una al crupier, y otra vuelta igual (la segunda del crupier, tapada).
+    const order = [];
     for (let k = 0; k < 2; k++) {
-      for (const s of players) s.hands[0].cards.push(this.draw());
-      this.dealer.push(this.draw());
+      for (const s of players) order.push(s.hands[0].cards);
+      order.push(this.dealer);
     }
+    this.phase = 'dealing';
+    let next = 0;
+    const step = () => {
+      order[next++].push(this.draw());
+      this.broadcast();
+      this.schedule(DEAL_STEP_MS, next < order.length ? step : () => this.startPlay());
+    };
+    this.broadcast();
+    this.schedule(DEAL_STEP_MS, step);
+  }
+
+  startPlay() {
     this.phase = 'playing';
+    const players = this.seats.filter((s) => s && s.hands.length > 0);
     for (const s of players) if (isNatural(s.hands[0])) s.hands[0].done = true;
 
     // El crupier revisa si tiene blackjack cuando muestra un As o una figura/10.

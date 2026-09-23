@@ -216,6 +216,7 @@ main { max-width: 1200px; margin: 0 auto; padding: 20px 16px 48px; }
 
 /* ---------- blackjack ---------- */
 .bj-table {
+  position: relative;
   background: radial-gradient(ellipse at top, #13703f 0%, var(--felt) 45%, var(--felt-dark) 100%);
   border: 12px solid var(--wood);
   border-radius: 28px 28px 180px 180px / 28px 28px 90px 90px;
@@ -270,8 +271,21 @@ main { max-width: 1200px; margin: 0 auto; padding: 20px 16px 48px; }
   background: repeating-linear-gradient(45deg, #8e1c1c 0 6px, #6b1212 6px 12px);
   border: 3px solid #fdfdf8;
 }
-.card.new { animation: dealIn .35s ease-out; }
-@keyframes dealIn { from { transform: translateY(-30px) scale(.8); opacity: 0; } }
+.card { will-change: transform; }
+
+/* Zapato de donde salen las cartas */
+.bj-shoe {
+  position: absolute; top: 16px; right: 22px;
+  display: flex; padding: 6px 8px 6px 6px;
+  background: #2a1a0d; border-radius: 6px 14px 14px 6px;
+  box-shadow: inset 0 0 8px rgba(0, 0, 0, .7), 0 4px 10px rgba(0, 0, 0, .4);
+  transform: rotate(-8deg);
+}
+.bj-shoe .card { width: 38px; height: 54px; }
+.bj-shoe .card + .card { margin-left: -34px; }
+@media (max-width: 520px) {
+  .bj-shoe { top: 10px; right: 10px; transform: rotate(-8deg) scale(.75); transform-origin: top right; }
+}
 .cards.small .card { width: 38px; height: 54px; }
 .cards.small .card + .card { margin-left: -20px; }
 .cards.small .card .s { font-size: 18px; }

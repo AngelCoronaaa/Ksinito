@@ -3,42 +3,26 @@
 window.BlackjackUI = (() => {
   const $ = (sel) => document.querySelector(sel);
   const RESULT_LABEL = { win: 'Gana', lose: 'Pierde', push: 'Empate', blackjack: 'Blackjack' };
+  const DEAL_MS = 420; // lo que tarda una carta en llegar desde el zapato
+  const DEAL_GAP_MS = 140; // separación entre cartas que llegan en la misma actualización
+  const FLIP_MS = 170; // media vuelta al descubrir la carta tapada
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
   let ctx;
   let state = null;
   let deadline = 0;
   let pendingBet = 0;
-  let renderedCounts = new Map(); // para animar solo las cartas nuevas
+
+  // Contenedores de cartas persistentes (por mano), para animar solo lo nuevo
+  // aunque el resto del asiento se vuelva a pintar.
+  let cardWraps = new Map(); // key -> { el, cards }
+  let animQueue = [];
 
   const rankValue = (r) => (r === 'A' ? 1 : ['J', 'Q', 'K'].includes(r) ? 10 : Number(r));
+  const sameCard = (a, b) => a === b || (!!a && !!b && a.r === b.r && a.s === b.s);
 
   function mySeatIndex() {
     return state ? state.seats.findIndex((s) => s && s.userId === ctx.user.id) : -1;
-  }
-
-  function cardsEl(cards, key, small = false) {
-    const wrap = document.createElement('div');
-    wrap.className = small ? 'cards small' : 'cards';
-    const before = renderedCounts.get(key) ?? 0;
-    cards.forEach((c, i) => {
-      const el = document.createElement('div');
-      if (!c) {
-        el.className = 'card back';
-      } else {
-        el.className = `card${c.s === '♥' || c.s === '♦' ? ' red' : ''}`;
-        const r = document.createElement('span');
-        r.className = 'r';
-        r.textContent = c.r;
-        const s = document.createElement('span');
-        s.className = 's';
-        s.textContent = c.s;
-        el.append(r, s);
-      }
-      if (i >= before) el.classList.add('new');
-      wrap.appendChild(el);
-    });
-    renderedCounts.set(key, cards.length);
-    return wrap;
   }
 
   function span(cls, text) {
@@ -46,6 +30,100 @@ window.BlackjackUI = (() => {
     el.className = cls;
     el.textContent = text;
     return el;
+  }
+
+  function fillCard(el, card) {
+    el.replaceChildren();
+    if (!card) {
+      el.className = 'card back';
+      return el;
+    }
+    el.className = `card${card.s === '♥' || card.s === '♦' ? ' red' : ''}`;
+    el.append(span('r', card.r), span('s', card.s));
+    return el;
+  }
+
+  /**
+   * Sincroniza las cartas de una mano con su contenedor y encola la animación
+   * de las cartas nuevas (reparto) o destapadas (giro). Devuelve si hubo cambios.
+   */
+  function syncCards(key, cards, small = false) {
+    let entry = cardWraps.get(key);
+    if (!entry) {
+      entry = { el: document.createElement('div'), cards: [] };
+      cardWraps.set(key, entry);
+    }
+    const { el } = entry;
+    el.className = small ? 'cards small' : 'cards';
+    let changed = false;
+
+    cards.forEach((card, i) => {
+      const node = el.children[i];
+      if (node && sameCard(entry.cards[i], card)) return;
+      changed = true;
+      if (node && entry.cards[i] === null && card) {
+        animQueue.push({ type: 'flip', node, card });
+        return;
+      }
+      const fresh = fillCard(document.createElement('div'), card);
+      if (node) node.replaceWith(fresh);
+      else el.appendChild(fresh);
+      animQueue.push({ type: 'deal', node: fresh });
+    });
+    while (el.children.length > cards.length) el.lastElementChild.remove();
+
+    entry.cards = cards.slice();
+    return { el, changed };
+  }
+
+  function flip(node, card, delay) {
+    const half = node.animate([{ transform: 'scaleX(1)' }, { transform: 'scaleX(0)' }], {
+      duration: FLIP_MS, delay, easing: 'ease-in', fill: 'forwards',
+    });
+    half.onfinish = () => {
+      fillCard(node, card);
+      half.cancel();
+      node.animate([{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }], { duration: FLIP_MS, easing: 'ease-out' });
+    };
+  }
+
+  /** Lanza las animaciones encoladas en este render, una detrás de otra. */
+  function runAnimations() {
+    const items = animQueue;
+    animQueue = [];
+    if (reducedMotion.matches) {
+      for (const it of items) if (it.type === 'flip') fillCard(it.node, it.card);
+      return;
+    }
+    const shoe = $('#bj-shoe').getBoundingClientRect();
+    const sx = shoe.left + shoe.width / 2;
+    const sy = shoe.top + shoe.height / 2;
+    let t = 0;
+    let lastLanding = 0;
+
+    for (const it of items) {
+      if (it.type === 'deal') {
+        const r = it.node.getBoundingClientRect();
+        const dx = sx - (r.left + r.width / 2);
+        const dy = sy - (r.top + r.height / 2);
+        it.node.animate(
+          [
+            { transform: `translate(${dx}px, ${dy}px) rotate(-100deg) scale(.8)`, boxShadow: '0 12px 24px rgba(0,0,0,.5)' },
+            { transform: 'none' },
+          ],
+          { duration: DEAL_MS, delay: t, easing: 'cubic-bezier(.2,.7,.2,1)', fill: 'backwards' }
+        );
+        lastLanding = t + DEAL_MS;
+        t += DEAL_GAP_MS;
+      } else if (it.type === 'flip') {
+        flip(it.node, it.card, t);
+        lastLanding = t + FLIP_MS * 2;
+        t += DEAL_GAP_MS;
+      } else if (it.type === 'reveal' && lastLanding) {
+        // Los totales y resultados aparecen cuando la carta ya ha llegado.
+        it.node.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 160, delay: lastLanding, fill: 'backwards' });
+      }
+    }
   }
 
   function seatEl(seat, i, mine) {
@@ -81,13 +159,16 @@ window.BlackjackUI = (() => {
       const h = document.createElement('div');
       h.className = 'hand';
       if (state.turn === i && seat.activeHand === k) h.classList.add('active');
-      h.appendChild(cardsEl(hand.cards, `${i}-${k}`, seat.hands.length > 1));
+      const { el: cards, changed } = syncCards(`${i}-${k}`, hand.cards, seat.hands.length > 1);
+      h.appendChild(cards);
+
       const info = document.createElement('div');
       info.className = 'hand-info';
-      info.append(span('total', hand.total > 21 ? `${hand.total} ✗` : String(hand.total)));
+      if (hand.cards.length) info.append(span('total', hand.total > 21 ? `${hand.total} ✗` : String(hand.total)));
       info.append(span('seat-bet', `${hand.bet}${hand.doubled ? ' ×2' : ''}`));
       if (hand.result) info.append(span(`res ${hand.result}`, RESULT_LABEL[hand.result]));
       h.appendChild(info);
+      if (changed) animQueue.push({ type: 'reveal', node: info });
       el.appendChild(h);
     });
 
@@ -99,6 +180,7 @@ window.BlackjackUI = (() => {
     switch (state.phase) {
       case 'waiting': return state.seats.some(Boolean) ? 'Esperando apuestas' : 'Mesa libre, siéntate para jugar';
       case 'betting': return 'Apuestas abiertas · reparto en';
+      case 'dealing': return 'Repartiendo…';
       case 'playing': {
         const seat = state.seats[state.turn];
         return state.turn === mine ? 'Tu turno' : `Turno de ${seat?.username ?? '…'}`;
@@ -113,17 +195,19 @@ window.BlackjackUI = (() => {
     const mine = mySeatIndex();
     const seat = mine === -1 ? null : state.seats[mine];
 
-    if (state.phase === 'waiting') renderedCounts = new Map();
+    if (state.phase === 'waiting') cardWraps = new Map();
 
     // Crupier
-    const dealer = $('#bj-dealer-cards');
-    dealer.replaceWith(Object.assign(cardsEl(state.dealer.cards, 'dealer'), { id: 'bj-dealer-cards' }));
-    $('#bj-dealer-total').textContent = state.dealer.total ?? '';
+    const { el: dealerCards, changed } = syncCards('dealer', state.dealer.cards);
+    const holder = $('#bj-dealer-cards');
+    if (dealerCards.parentNode !== holder) holder.replaceChildren(dealerCards);
+    const dealerTotal = $('#bj-dealer-total');
+    dealerTotal.textContent = state.dealer.total ?? '';
+    if (changed) animQueue.push({ type: 'reveal', node: dealerTotal });
 
     // Asientos
     const seats = $('#bj-seats');
-    seats.innerHTML = '';
-    state.seats.forEach((s, i) => seats.appendChild(seatEl(s, i, mine)));
+    seats.replaceChildren(...state.seats.map((s, i) => seatEl(s, i, mine)));
 
     $('#bj-phase').textContent = statusText(mine);
 
@@ -148,6 +232,8 @@ window.BlackjackUI = (() => {
     else if (seat.hands.length === 0 && seat.bet === 0) hint = 'Hay una mano en juego. Podrás apostar en la siguiente.';
     $('#bj-hint').textContent = hint;
     renderPending();
+
+    runAnimations();
   }
 
   function renderPending() {

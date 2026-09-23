@@ -46,7 +46,8 @@ Variables de entorno opcionales:
 - 6 barajas, el crupier se planta en 17, blackjack paga 3:2, doblar con dos cartas y
   dividir una vez.
 - La mano se reparte cuando todos los sentados apostaron o 15 s después de la primera
-  apuesta. Cada jugador tiene 20 s por turno (si no, se planta solo).
+  apuesta. Las cartas se dan una a una (como en una mesa real) y salen animadas desde
+  el zapato; la carta tapada del crupier se gira al descubrirse. Cada jugador tiene 20 s por turno (si no, se planta solo).
 - Si cierras la pestaña, conservas el asiento 20 s por si recargas.
 
 ## Estructura

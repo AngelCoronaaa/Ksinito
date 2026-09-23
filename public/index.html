@@ -81,9 +81,12 @@
       <!-- Blackjack -->
       <section id="blackjack" class="game hidden">
         <div class="bj-table">
+          <div id="bj-shoe" class="bj-shoe" aria-hidden="true">
+            <div class="card back"></div><div class="card back"></div><div class="card back"></div>
+          </div>
           <div class="bj-dealer">
             <div class="label">Crupier <span id="bj-dealer-total" class="total"></span></div>
-            <div id="bj-dealer-cards" class="cards"></div>
+            <div id="bj-dealer-cards"></div>
           </div>
           <div class="bj-status">
             <span id="bj-phase"></span>
