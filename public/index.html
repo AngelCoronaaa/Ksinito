@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ksinito</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <!-- Acceso -->
+  <section id="auth-view" class="auth hidden">
+    <div class="auth-card">
+      <h1 class="logo">Ksinito</h1>
+      <p class="tagline">Ruleta y Blackjack · 100 créditos de bienvenida por cuenta</p>
+      <div class="auth-tabs">
+        <button type="button" data-mode="login" class="active">Entrar</button>
+        <button type="button" data-mode="register">Crear cuenta</button>
+      </div>
+      <form id="auth-form" novalidate>
+        <label>Usuario
+          <input name="username" autocomplete="username" maxlength="20" required>
+        </label>
+        <label>Contraseña
+          <input name="password" type="password" autocomplete="current-password" maxlength="100" required>
+        </label>
+        <p id="auth-error" class="error" role="alert"></p>
+        <button type="submit" id="auth-submit" class="btn primary block">Entrar</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- Casino -->
+  <section id="app-view" class="hidden">
+    <header class="topbar">
+      <div class="logo small">Ksinito</div>
+      <nav class="tabs">
+        <button type="button" data-tab="roulette" class="active">Ruleta</button>
+        <button type="button" data-tab="blackjack">Blackjack</button>
+      </nav>
+      <div class="user-box">
+        <span id="username" class="username"></span>
+        <span class="credits"><span id="credits">0</span> créditos</span>
+        <button type="button" id="logout" class="btn ghost small">Salir</button>
+      </div>
+    </header>
+
+    <main>
+      <!-- Ruleta -->
+      <section id="roulette" class="game">
+        <div class="roulette-layout">
+          <div class="wheel-panel">
+            <div class="wheel-wrap">
+              <canvas id="wheel"></canvas>
+              <div class="wheel-pointer"></div>
+            </div>
+            <div class="round-status">
+              <span id="rl-phase">Conectando…</span>
+              <span id="rl-timer" class="timer"></span>
+            </div>
+            <div id="rl-outcome" class="outcome"></div>
+          </div>
+
+          <div class="board-panel">
+            <div class="panel">
+              <h3>Últimos 30 giros</h3>
+              <div id="rl-history" class="history-strip"></div>
+            </div>
+            <div class="board-scroll">
+              <div id="rl-board" class="board"></div>
+            </div>
+            <div class="bet-controls">
+              <div id="rl-chips" class="chips"></div>
+              <div class="bet-summary">Apostado: <strong id="rl-total">0</strong></div>
+              <button type="button" id="rl-clear" class="btn ghost">Quitar apuestas</button>
+            </div>
+            <p class="rules">Ruleta europea · Pleno 35:1 · Docena/Columna 2:1 · Rojo/Negro, Par/Impar, 1-18/19-36 1:1 · Elige ficha y pulsa en la mesa.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Blackjack -->
+      <section id="blackjack" class="game hidden">
+        <div class="bj-table">
+          <div class="bj-dealer">
+            <div class="label">Crupier <span id="bj-dealer-total" class="total"></span></div>
+            <div id="bj-dealer-cards" class="cards"></div>
+          </div>
+          <div class="bj-status">
+            <span id="bj-phase"></span>
+            <span id="bj-timer" class="timer"></span>
+          </div>
+          <div id="bj-seats" class="bj-seats"></div>
+        </div>
+
+        <div class="bj-controls">
+          <p id="bj-hint" class="hint"></p>
+          <div id="bj-bet" class="bj-bet hidden">
+            <div id="bj-chips" class="chips"></div>
+            <div class="bet-summary">Apuesta: <strong id="bj-pending">0</strong></div>
+            <button type="button" id="bj-bet-clear" class="btn ghost">Borrar</button>
+            <button type="button" id="bj-bet-place" class="btn primary">Apostar</button>
+          </div>
+          <div id="bj-actions" class="bj-actions hidden">
+            <button type="button" class="btn primary" data-action="hit">Pedir</button>
+            <button type="button" class="btn primary" data-action="stand">Plantarse</button>
+            <button type="button" class="btn" data-action="double">Doblar</button>
+            <button type="button" class="btn" data-action="split">Dividir</button>
+          </div>
+          <button type="button" id="bj-leave" class="btn ghost hidden">Levantarse</button>
+        </div>
+        <p class="rules">Mesa de 6 jugadores · 6 barajas · El crupier se planta en 17 · Blackjack paga 3:2 · Doblar con 2 cartas · Dividir una vez</p>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" role="status"></div>
+  </section>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/roulette.js"></script>
+  <script src="/js/blackjack.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>
