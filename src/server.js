@@ -1,5 +1,7 @@
 'use strict';
 
+const crypto = require('node:crypto');
+const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
 const express = require('express');
@@ -44,7 +46,24 @@ app.use('/vendor/confetti', vendor('canvas-confetti', 'dist'));
 app.use('/vendor/fonts/inter', vendor('@fontsource-variable/inter'));
 app.use('/vendor/fonts/cinzel', vendor('@fontsource/cinzel'));
 
-app.use(express.static(path.join(__dirname, '..', 'public')));
+// Cada versión del código cambia la URL de CSS/JS (?v=huella del contenido). Si no, el
+// navegador (Cloudflare le deja cachearlos 4 h) usa JS viejo con el HTML nuevo tras un deploy.
+const PUBLIC_DIR = path.join(__dirname, '..', 'public');
+const assetsHash = crypto.createHash('sha256').update(JSON.stringify(require('../package.json').dependencies));
+for (const file of fs.readdirSync(PUBLIC_DIR, { recursive: true }).sort()) {
+  const full = path.join(PUBLIC_DIR, file);
+  if (fs.statSync(full).isFile()) assetsHash.update(file).update(fs.readFileSync(full));
+}
+const ASSETS_VERSION = assetsHash.digest('hex').slice(0, 12);
+const indexHtml = fs
+  .readFileSync(path.join(PUBLIC_DIR, 'index.html'), 'utf8')
+  .replace(/(href|src)="(\/(?:css|js|vendor)\/[^"?]+)"/g, `$1="$2?v=${ASSETS_VERSION}"`);
+app.get(['/', '/index.html'], (req, res) => {
+  res.set('Cache-Control', 'no-cache');
+  res.type('html').send(indexHtml);
+});
+
+app.use(express.static(PUBLIC_DIR));
 
 const server = http.createServer(app);
 const io = new Server(server, {
