@@ -1,7 +1,7 @@
 'use strict';
 
-// Mesa de blackjack multijugador (máximo 6 asientos).
-// Reglas: 6 barajas, el crupier se planta en 17 (incluido 17 suave), el
+// Mesa de blackjack multijugador (15 asientos por mesa; server.js crea varias).
+// Reglas: 8 barajas, el crupier se planta en 17 (incluido 17 suave), el
 // blackjack paga 3:2, se puede doblar con las dos primeras cartas y dividir
 // una vez (los ases divididos reciben una sola carta).
 //
@@ -12,13 +12,15 @@ const wallet = require('./wallet');
 const { avatarUrl } = require('./avatars');
 const { GameError, assertInt } = require('./errors');
 
-const MAX_SEATS = 6;
-const DECKS = 6;
+const MAX_SEATS = 15;
+const DECKS = 8;
 const RESHUFFLE_AT = Math.floor(DECKS * 52 * 0.25);
 const MIN_BET = 1;
 const MAX_BET = 500;
 const BETTING_MS = 15_000;
 const DEAL_STEP_MS = 450;
+const DEAL_TOTAL_MS = 7_000; // con la mesa llena el reparto se acelera para no pasar de esto
+const MIN_DEAL_STEP_MS = 180;
 const TURN_MS = 20_000;
 const DEALER_STEP_MS = 800;
 const RESULT_MS = 6_000;
@@ -67,11 +69,13 @@ const newHand = (cards, bet, fromSplit = false) => ({
 });
 
 class BlackjackTable {
-  constructor(io, id = 'main') {
+  constructor(io, id, { seats = MAX_SEATS, onChange = () => {} } = {}) {
     this.io = io;
     this.id = id;
+    this.name = `Mesa ${id}`;
     this.room = `bj:${id}`;
-    this.seats = Array(MAX_SEATS).fill(null);
+    this.onChange = onChange; // avisa a server.js para actualizar el resumen de mesas
+    this.seats = Array(seats).fill(null);
     this.shoe = buildShoe();
     this.dealer = [];
     this.holeHidden = true;
@@ -118,6 +122,8 @@ class BlackjackTable {
     const dealerCards = this.holeHidden && this.dealer.length === 2 ? [this.dealer[0], null] : this.dealer;
     const visible = dealerCards.filter(Boolean);
     return {
+      id: this.id,
+      name: this.name,
       phase: this.phase,
       endsIn: this.endsAt ? Math.max(0, this.endsAt - Date.now()) : null,
       duration: this.duration,
@@ -149,14 +155,26 @@ class BlackjackTable {
     };
   }
 
+  /** Resumen para el selector de mesas (lo reciben todos los jugadores). */
+  summary() {
+    return {
+      id: this.id,
+      name: this.name,
+      seats: this.seats.length,
+      occupants: this.seats.filter(Boolean).map((s) => s.userId),
+      phase: this.phase,
+    };
+  }
+
   broadcast() {
     this.io.to(this.room).emit('bj:state', this.publicState());
+    this.onChange();
   }
 
   // ---------- asientos y apuestas ----------
 
   sit(user, seat) {
-    assertInt(seat, 0, MAX_SEATS - 1, 'El asiento');
+    assertInt(seat, 0, this.seats.length - 1, 'El asiento');
     if (this.seatIndexOf(user.id) !== -1) throw new GameError('Ya estás sentado en esta mesa');
     if (this.seats[seat]) throw new GameError('Ese asiento está ocupado');
     this.seats[seat] = { userId: user.id, username: user.username, bet: 0, hands: [], activeHand: 0, leaving: false };
@@ -235,14 +253,15 @@ class BlackjackTable {
       order.push(this.dealer);
     }
     this.phase = 'dealing';
+    const stepMs = Math.max(MIN_DEAL_STEP_MS, Math.min(DEAL_STEP_MS, Math.floor(DEAL_TOTAL_MS / order.length)));
     let next = 0;
     const step = () => {
       order[next++].push(this.draw());
       this.broadcast();
-      this.schedule(DEAL_STEP_MS, next < order.length ? step : () => this.startPlay());
+      this.schedule(stepMs, next < order.length ? step : () => this.startPlay());
     };
     this.broadcast();
-    this.schedule(DEAL_STEP_MS, step);
+    this.schedule(stepMs, step);
   }
 
   startPlay() {
@@ -260,7 +279,7 @@ class BlackjackTable {
 
   /** Pasa el turno a la siguiente mano pendiente, o al crupier si no queda ninguna. */
   advance() {
-    for (let i = this.turn ?? 0; i < MAX_SEATS; i++) {
+    for (let i = this.turn ?? 0; i < this.seats.length; i++) {
       const seat = this.seats[i];
       if (!seat) continue;
       if (seat.leaving) for (const h of seat.hands) h.done = true;
@@ -384,6 +403,16 @@ class BlackjackTable {
                 ? hand.bet
                 : 0;
         if (hand.payout > 0) wallet.credit(seat.userId, hand.payout, `blackjack:${result}`);
+      }
+      if (seat.hands.length) {
+        // Aviso privado: llega aunque el jugador esté mirando otra mesa.
+        this.io.to(`user:${seat.userId}`).emit('bj:outcome', {
+          table: this.id,
+          name: this.name,
+          bet: seat.hands.reduce((sum, h) => sum + h.bet, 0),
+          payout: seat.hands.reduce((sum, h) => sum + h.payout, 0),
+          results: seat.hands.map((h) => h.result),
+        });
       }
     }
 

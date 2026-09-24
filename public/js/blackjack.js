@@ -8,10 +8,15 @@ window.BlackjackUI = (() => {
   const FLIP_MS = 190; // media vuelta al descubrir la carta tapada
   const TIMED_PHASES = ['betting', 'playing', 'settled'];
 
+  const PLAYING_PHASES = ['dealing', 'playing', 'dealer', 'settled'];
+
   let ctx;
   let state = null;
   let deadline = 0;
   let pendingBet = 0;
+  let currentTable = 1; // mesa que se está mirando
+  let lobby = []; // resumen de todas las mesas
+  let lobbyReceived = false;
 
   // Contenedores de cartas persistentes (por mano), para animar solo lo nuevo
   // aunque el resto del asiento se vuelva a pintar.
@@ -26,6 +31,11 @@ window.BlackjackUI = (() => {
 
   function mySeatIndex() {
     return state ? state.seats.findIndex((s) => s && s.userId === ctx.user.id) : -1;
+  }
+
+  /** Mesa en la que estás sentado (puede no ser la que estás mirando). */
+  function myTable() {
+    return lobby.find((t) => t.occupants.includes(ctx.user.id)) ?? null;
   }
 
   function span(cls, text) {
@@ -173,9 +183,10 @@ window.BlackjackUI = (() => {
       btn.type = 'button';
       btn.className = 'btn btn-outline-gold btn-sm';
       btn.innerHTML = '<i class="bi bi-plus-circle me-1"></i>Sentarse';
-      btn.disabled = mine !== -1;
+      const elsewhere = myTable();
+      btn.disabled = mine !== -1 || (elsewhere !== null && elsewhere.id !== currentTable);
       btn.addEventListener('click', async () => {
-        const res = await ctx.emit('bj:sit', { seat: i });
+        const res = await ctx.emit('bj:sit', { table: currentTable, seat: i });
         if (!res.ok) ctx.toast(res.error, 'error');
       });
       el.append(span('seat-spot', String(i + 1)), btn);
@@ -278,6 +289,8 @@ window.BlackjackUI = (() => {
     }
     if (state.phase === 'dealing') shownBets.clear();
 
+    $('#bj-table-name').textContent = state.name;
+
     // Crupier
     const { el: dealerCards, changed } = syncCards('dealer', state.dealer.cards);
     const holder = $('#bj-dealer-cards');
@@ -308,7 +321,10 @@ window.BlackjackUI = (() => {
     }
 
     let hint = '';
-    if (!seat) hint = state.seats.every(Boolean) ? 'La mesa está llena (6/6). Puedes mirar hasta que se libere un asiento.' : 'Elige un asiento libre para jugar.';
+    const elsewhere = myTable();
+    const n = state.seats.length;
+    if (!seat && elsewhere && elsewhere.id !== currentTable) hint = `Estás sentado en la ${elsewhere.name}. Levántate allí para jugar en esta mesa.`;
+    else if (!seat) hint = state.seats.every(Boolean) ? `La mesa está llena (${n}/${n}). Puedes mirar o probar en otra mesa.` : 'Elige un asiento libre para jugar.';
     else if (canBet) hint = `Elige tus fichas y pulsa Apostar (mín. ${state.limits.min}, máx. ${state.limits.max}).`;
     else if (seat.hands.length === 0 && seat.bet === 0) hint = 'Hay una mano en juego. Podrás apostar en la siguiente.';
     $('#bj-hint').textContent = hint;
@@ -317,20 +333,75 @@ window.BlackjackUI = (() => {
     runAnimations();
   }
 
-  /** Anuncia la victoria si alguna de tus manos ganó en la ronda que acaba de terminar. */
-  function onSettled() {
-    const seat = state.seats[mySeatIndex()];
-    if (!seat || !seat.hands.some((h) => h.result === 'win' || h.result === 'blackjack')) return;
-    const bet = seat.hands.reduce((sum, h) => sum + h.bet, 0);
-    const payout = seat.hands.reduce((sum, h) => sum + h.payout, 0);
-    const blackjack = seat.hands.some((h) => h.result === 'blackjack');
-    // Espera a que se vean las cartas y los resultados.
+  /** Anuncia la victoria si alguna de tus manos ganó (llega aunque mires otra mesa). */
+  function onOutcome(o) {
+    if (!o.results.some((r) => r === 'win' || r === 'blackjack')) return;
+    const blackjack = o.results.includes('blackjack');
+    const hand = blackjack ? 'Blackjack natural 3:2' : o.results.length > 1 ? 'Manos divididas' : 'Mano ganadora';
+    // Si estás mirando la mesa, espera a que se vean las cartas y los resultados.
     setTimeout(() => ctx.celebrate({
-      amount: payout,
-      net: payout - bet,
-      detail: blackjack ? 'Blackjack natural · paga 3:2' : seat.hands.length > 1 ? 'Blackjack · manos divididas' : 'Blackjack · mano ganadora',
+      amount: o.payout,
+      net: o.payout - o.bet,
+      detail: `Blackjack · ${o.name} · ${hand}`,
       big: blackjack,
-    }), 600);
+    }), o.table === currentTable ? 600 : 0);
+  }
+
+  function tableStatus(t) {
+    if (t.occupants.length >= t.seats) return ['full', 'Llena'];
+    if (PLAYING_PHASES.includes(t.phase)) return ['playing', 'En juego'];
+    return t.occupants.length ? ['open', 'Abierta'] : ['free', 'Libre'];
+  }
+
+  function renderTables() {
+    const mine = myTable();
+    $('#bj-tables').replaceChildren(
+      ...lobby.map((t) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'bj-table-pick';
+        btn.classList.toggle('active', t.id === currentTable);
+        btn.setAttribute('aria-pressed', String(t.id === currentTable));
+        const count = span('tp-count', ` ${t.occupants.length}/${t.seats}`);
+        const icon = document.createElement('i');
+        icon.className = 'bi bi-people-fill';
+        count.prepend(icon);
+        let badge;
+        if (mine?.id === t.id) badge = span('tp-me', 'Tu mesa');
+        else {
+          const [cls, label] = tableStatus(t);
+          badge = span(`tp-status ${cls}`, label);
+        }
+        const head = document.createElement('span');
+        head.className = 'tp-head';
+        head.append(span('tp-name', t.name), badge);
+        btn.append(head, count);
+        btn.addEventListener('click', () => watch(t.id));
+        return btn;
+      })
+    );
+  }
+
+  /** Cambia la mesa que se está mirando. */
+  async function watch(id) {
+    if (id !== currentTable) {
+      currentTable = id;
+      state = null;
+      pendingBet = 0;
+      cardWraps = new Map();
+      animQueue = [];
+      shownResults.clear();
+      shownBets.clear();
+      $('#bj-seats').replaceChildren();
+      $('#bj-dealer-cards').replaceChildren();
+      $('#bj-dealer-total').textContent = '';
+      $('#bj-phase').textContent = 'Cargando mesa…';
+      $('#bj-hint').textContent = '';
+      for (const sel of ['#bj-bet', '#bj-actions', '#bj-leave']) $(sel).classList.add('hidden');
+      renderTables();
+    }
+    const res = await ctx.emit('bj:watch', { table: id });
+    if (!res.ok) ctx.toast(res.error, 'error');
   }
 
   function renderPending() {
@@ -390,12 +461,25 @@ window.BlackjackUI = (() => {
     });
 
     ctx.socket.on('bj:state', (s) => {
-      const prevPhase = state?.phase;
+      if (s.id !== currentTable) return; // estado de una mesa que ya no se mira
       state = s;
       deadline = s.endsIn === null ? 0 : Date.now() + s.endsIn;
       render();
-      if (s.phase === 'settled' && prevPhase && prevPhase !== 'settled') onSettled();
     });
+
+    ctx.socket.on('bj:lobby', (tables) => {
+      lobby = tables;
+      // Al entrar (o recargar) se abre directamente la mesa donde estás sentado.
+      const mine = myTable();
+      if (!lobbyReceived && mine && mine.id !== currentTable) watch(mine.id);
+      lobbyReceived = true;
+      renderTables();
+      if (state) render();
+    });
+
+    ctx.socket.on('bj:outcome', onOutcome);
+    // También al reconectar: el servidor nuevo no sabe qué mesa mirabas.
+    ctx.socket.on('connect', () => watch(currentTable));
 
     setInterval(tick, 150);
   }

@@ -70,8 +70,9 @@ o sin él. Para evitarlo:
 
 ## Blackjack
 
-- Una mesa de **máximo 6 jugadores**; el resto puede mirar hasta que se libere un asiento.
-- 6 barajas, el crupier se planta en 17, blackjack paga 3:2, doblar con dos cartas y
+- **5 mesas de 15 jugadores**. Arriba de la mesa puedes cambiar de mesa y ver cuántos hay en cada
+  una. Solo puedes estar sentado en una mesa a la vez, pero puedes mirar las demás.
+- 8 barajas, el crupier se planta en 17, blackjack paga 3:2, doblar con dos cartas y
   dividir una vez.
 - La mano se reparte cuando todos los sentados apostaron o 15 s después de la primera
   apuesta. Las cartas se dan una a una (como en una mesa real) y salen animadas desde

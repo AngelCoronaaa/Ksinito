@@ -8,13 +8,14 @@ const auth = require('./auth');
 const profile = require('./profile');
 const avatars = require('./avatars');
 const wallet = require('./wallet');
-const { GameError } = require('./errors');
+const { GameError, assertInt } = require('./errors');
 const { RouletteGame } = require('./roulette');
 const { BlackjackTable } = require('./blackjack');
 
 const PORT = Number(process.env.PORT) || 3000;
 const LEAVE_GRACE_MS = 20_000; // tiempo para recargar la página sin perder el asiento
 const EVENTS_PER_SECOND = 15;
+const BLACKJACK_TABLES = 5;
 
 const app = express();
 app.disable('x-powered-by');
@@ -61,7 +62,42 @@ const io = new Server(server, {
 });
 
 const roulette = new RouletteGame(io);
-const blackjack = new BlackjackTable(io);
+
+// Resumen de todas las mesas (quién está sentado y en qué fase), agrupado para
+// no enviarlo en cada carta repartida.
+let lobbyTimer = null;
+let lastLobby = '';
+const lobbyState = () => [...tables.values()].map((t) => t.summary());
+function scheduleLobby() {
+  if (lobbyTimer) return;
+  lobbyTimer = setTimeout(() => {
+    lobbyTimer = null;
+    const lobby = lobbyState();
+    const json = JSON.stringify(lobby);
+    if (json === lastLobby) return;
+    lastLobby = json;
+    io.emit('bj:lobby', lobby);
+  }, 150);
+}
+
+const tables = new Map();
+for (let id = 1; id <= BLACKJACK_TABLES; id++) tables.set(id, new BlackjackTable(io, id, { onChange: scheduleLobby }));
+
+function getTable(id) {
+  return tables.get(assertInt(id, 1, BLACKJACK_TABLES, 'La mesa'));
+}
+
+/** Mesa en la que está sentado el usuario (solo puede estar en una). */
+function tableOf(userId) {
+  for (const table of tables.values()) if (table.seatIndexOf(userId) !== -1) return table;
+  return null;
+}
+
+function requireTable(userId) {
+  const table = tableOf(userId);
+  if (!table) throw new GameError('No estás sentado en ninguna mesa');
+  return table;
+}
 
 // Cada cambio de saldo se envía a todas las pestañas abiertas del usuario.
 wallet.events.on('balance', (userId, credits) => io.to(`user:${userId}`).emit('balance', { credits }));
@@ -69,7 +105,7 @@ wallet.events.on('balance', (userId, credits) => io.to(`user:${userId}`).emit('b
 // Al cambiar la foto se avisa a sus pestañas y, si está sentado, a toda la mesa.
 avatars.events.on('change', (userId, avatar) => {
   io.to(`user:${userId}`).emit('profile', { avatar });
-  if (blackjack.seatIndexOf(userId) !== -1) blackjack.broadcast();
+  tableOf(userId)?.broadcast();
 });
 
 io.use((socket, next) => {
@@ -88,11 +124,12 @@ io.on('connection', (socket) => {
   clearTimeout(leaveTimers.get(user.id));
   leaveTimers.delete(user.id);
 
-  socket.join([`user:${user.id}`, roulette.room, blackjack.room]);
+  // Las salas de blackjack se eligen con bj:watch.
+  socket.join([`user:${user.id}`, roulette.room]);
   socket.emit('balance', { credits: wallet.getBalance(user.id) });
   socket.emit('roulette:state', roulette.publicState());
   socket.emit('roulette:bets', roulette.userBets(user.id));
-  socket.emit('bj:state', blackjack.publicState());
+  socket.emit('bj:lobby', lobbyState());
 
   // Limitador simple por socket para evitar spam de eventos.
   let tokens = EVENTS_PER_SECOND;
@@ -122,10 +159,26 @@ io.on('connection', (socket) => {
 
   on('roulette:bet', (p) => roulette.placeBet(user, p));
   on('roulette:clear', () => roulette.clearBets(user));
-  on('bj:sit', (p) => blackjack.sit(user, p.seat));
-  on('bj:leave', () => blackjack.leave(user.id));
-  on('bj:bet', (p) => blackjack.placeBet(user, p.amount));
-  on('bj:action', (p) => blackjack.act(user, p.action));
+  // Mirar una mesa: deja la sala de la anterior y recibe el estado de la nueva.
+  const watch = (table) => {
+    for (const other of tables.values()) if (other !== table) socket.leave(other.room);
+    socket.join(table.room);
+  };
+  on('bj:watch', (p) => {
+    const table = getTable(p.table);
+    watch(table);
+    socket.emit('bj:state', table.publicState());
+  });
+  on('bj:sit', (p) => {
+    const table = getTable(p.table);
+    const current = tableOf(user.id);
+    if (current && current !== table) throw new GameError(`Ya estás sentado en la ${current.name}`);
+    watch(table); // antes de sentarse, para recibir el estado que se envía al hacerlo
+    table.sit(user, p.seat);
+  });
+  on('bj:leave', () => tableOf(user.id)?.leave(user.id));
+  on('bj:bet', (p) => requireTable(user.id).placeBet(user, p.amount));
+  on('bj:action', (p) => requireTable(user.id).act(user, p.action));
 
   socket.on('disconnect', () => {
     const remaining = (connections.get(user.id) ?? 1) - 1;
@@ -135,7 +188,7 @@ io.on('connection', (socket) => {
       user.id,
       setTimeout(() => {
         leaveTimers.delete(user.id);
-        if (!connections.has(user.id)) blackjack.leave(user.id);
+        if (!connections.has(user.id)) tableOf(user.id)?.leave(user.id);
       }, LEAVE_GRACE_MS)
     );
   });
