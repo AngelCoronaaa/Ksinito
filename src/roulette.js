@@ -2,10 +2,14 @@
 
 // Ruleta europea (un solo cero) con rondas compartidas por todos los jugadores:
 // apuestas (20s) -> giro (7s) -> resultado (5s) -> ...
+//
+// Todo lo que cambia el estado (apuestas, cambios de fase) pasa por `this.queue`,
+// de una operación en una, porque cobrar y pagar en MySQL es asíncrono.
 
 const crypto = require('node:crypto');
-const { db, transaction } = require('./db');
+const { query, transaction } = require('./db');
 const wallet = require('./wallet');
+const { SerialQueue } = require('./queue');
 const { GameError, assertInt } = require('./errors');
 
 const BETTING_MS = 20_000;
@@ -34,19 +38,25 @@ const BET_TYPES = {
   high: { payout: 1, wins: (_, n) => n >= 19 },
 };
 
-const stmts = {
-  history: db.prepare('SELECT number FROM roulette_spins ORDER BY id DESC LIMIT ?'),
-  insert: db.prepare('INSERT INTO roulette_spins (number, created_at) VALUES (?, ?)'),
-  trim: db.prepare(
-    'DELETE FROM roulette_spins WHERE id NOT IN (SELECT id FROM roulette_spins ORDER BY id DESC LIMIT ?)'
-  ),
+const SQL = {
+  history: 'SELECT number FROM roulette_spins ORDER BY id DESC LIMIT ?',
+  insert: 'INSERT INTO roulette_spins (number, created_at) VALUES (?, ?)',
+  // MySQL no deja usar LIMIT dentro de NOT IN directamente; va en una tabla derivada.
+  trim: 'DELETE FROM roulette_spins WHERE id NOT IN (SELECT id FROM (SELECT id FROM roulette_spins ORDER BY id DESC LIMIT ?) AS keep_rows)',
 };
 
 class RouletteGame {
-  constructor(io) {
+  /** Carga el historial de MySQL y arranca la primera ronda. */
+  static async create(io) {
+    const rows = await query(SQL.history, [HISTORY_SIZE]);
+    return new RouletteGame(io, rows.map(({ number }) => ({ number, color: colorOf(number) })));
+  }
+
+  constructor(io, history) {
     this.io = io;
     this.room = 'roulette';
-    this.history = stmts.history.all(HISTORY_SIZE).map(({ number }) => ({ number, color: colorOf(number) }));
+    this.queue = new SerialQueue('roulette');
+    this.history = history;
     this.bets = new Map(); // userId -> Map(key -> { type, value, amount })
     this.startBetting();
   }
@@ -78,7 +88,7 @@ class RouletteGame {
   schedule(ms, fn) {
     this.endsAt = Date.now() + ms;
     this.duration = ms;
-    setTimeout(fn, ms);
+    setTimeout(() => this.queue.fire(fn), ms);
   }
 
   startBetting() {
@@ -96,15 +106,12 @@ class RouletteGame {
     this.broadcast();
   }
 
-  settle() {
+  async settle() {
     const number = this.result;
     const color = colorOf(number);
-    transaction(() => {
-      stmts.insert.run(number, Date.now());
-      stmts.trim.run(HISTORY_SIZE);
-    });
     this.history = [{ number, color }, ...this.history].slice(0, HISTORY_SIZE);
 
+    const payouts = [];
     for (const [userId, bets] of this.bets) {
       let staked = 0;
       let won = 0;
@@ -113,16 +120,36 @@ class RouletteGame {
         const def = BET_TYPES[bet.type];
         if (def.wins(bet.value, number)) won += bet.amount * (def.payout + 1);
       }
-      if (won > 0) wallet.credit(userId, won, `roulette:win:${number}`);
-      this.io.to(`user:${userId}`).emit('roulette:outcome', { number, color, staked, won });
+      payouts.push({ userId, staked, won });
     }
+
+    // Aunque falle guardar el historial, los premios se pagan.
+    await transaction(async (tx) => {
+      await tx.query(SQL.insert, [number, Date.now()]);
+      await tx.query(SQL.trim, [HISTORY_SIZE]);
+    }).catch((err) => console.error('[roulette] No se pudo guardar el giro', err));
+
+    await Promise.all(
+      payouts.map(async ({ userId, staked, won }) => {
+        try {
+          if (won > 0) await wallet.credit(userId, won, `roulette:win:${number}`);
+          this.io.to(`user:${userId}`).emit('roulette:outcome', { number, color, staked, won });
+        } catch (err) {
+          console.error(`[roulette] No se pudo pagar ${won} al usuario ${userId}`, err);
+        }
+      })
+    );
 
     this.phase = 'result';
     this.schedule(RESULT_MS, () => this.startBetting());
     this.broadcast();
   }
 
-  placeBet(user, { type, value, amount }) {
+  placeBet(user, bet) {
+    return this.queue.run(() => this.#placeBet(user, bet));
+  }
+
+  async #placeBet(user, { type, value, amount }) {
     if (this.phase !== 'betting') throw new GameError('Las apuestas están cerradas');
     const def = Object.hasOwn(BET_TYPES, type) ? BET_TYPES[type] : null;
     if (!def) throw new GameError('Tipo de apuesta no válido');
@@ -140,7 +167,7 @@ class RouletteGame {
     if (onSpot + amount > MAX_BET_PER_SPOT) throw new GameError(`Máximo ${MAX_BET_PER_SPOT} por casilla`);
     if (inRound + amount > MAX_BET_PER_ROUND) throw new GameError(`Máximo ${MAX_BET_PER_ROUND} por ronda`);
 
-    if (wallet.debit(user.id, amount, `roulette:bet:${key}`) === null) {
+    if ((await wallet.debit(user.id, amount, `roulette:bet:${key}`)) === null) {
       throw new GameError('Créditos insuficientes');
     }
     bets.set(key, { type, value, amount: onSpot + amount });
@@ -149,13 +176,16 @@ class RouletteGame {
   }
 
   clearBets(user) {
-    if (this.phase !== 'betting') throw new GameError('Las apuestas están cerradas');
-    const bets = this.bets.get(user.id);
-    if (!bets) return;
-    const total = [...bets.values()].reduce((sum, b) => sum + b.amount, 0);
-    this.bets.delete(user.id);
-    if (total > 0) wallet.credit(user.id, total, 'roulette:refund');
-    this.sendBets(user.id);
+    return this.queue.run(async () => {
+      if (this.phase !== 'betting') throw new GameError('Las apuestas están cerradas');
+      const bets = this.bets.get(user.id);
+      if (!bets) return;
+      const total = [...bets.values()].reduce((sum, b) => sum + b.amount, 0);
+      // Primero se devuelve el dinero: si MySQL falla, las apuestas siguen en la mesa.
+      if (total > 0) await wallet.credit(user.id, total, 'roulette:refund');
+      this.bets.delete(user.id);
+      this.sendBets(user.id);
+    });
   }
 }
 

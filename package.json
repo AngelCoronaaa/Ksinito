@@ -2,14 +2,14 @@
   "name": "ksinito",
   "version": "1.0.0",
   "private": true,
-  "description": "Casino online con ruleta y blackjack multijugador",
+  "description": "Casino online con ruleta y blackjack multijugador (MySQL)",
   "main": "src/server.js",
   "scripts": {
-    "start": "node --disable-warning=ExperimentalWarning src/server.js",
-    "dev": "node --disable-warning=ExperimentalWarning --watch src/server.js"
+    "start": "node --env-file-if-exists=.env src/server.js",
+    "dev": "node --env-file-if-exists=.env --watch src/server.js"
   },
   "engines": {
-    "node": ">=22.13"
+    "node": ">=22.9"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
@@ -20,6 +20,7 @@
     "canvas-confetti": "^1.9.4",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.3",
+    "mysql2": "^3.24.4",
     "socket.io": "^4.8.1"
   },
   "devDependencies": {

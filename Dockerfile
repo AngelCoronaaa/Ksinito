@@ -1,11 +1,10 @@
 # Ksinito en producción (Coolify, Dokploy, docker run…).
-# Los datos (cuentas, créditos, fotos y el secreto JWT) viven en /data:
-# monta ahí un volumen persistente o se borrarán en cada deploy.
+# Los datos viven en MySQL: configura DATABASE_URL (y DATABASE_SSL=1 si tu proveedor
+# exige TLS). La app crea las tablas de db/schema.sql al arrancar.
 FROM node:22-alpine
 
 WORKDIR /app
 ENV NODE_ENV=production \
-    DATA_DIR=/data \
     PORT=3000
 
 COPY package.json package-lock.json ./
@@ -13,10 +12,8 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 COPY src ./src
 COPY public ./public
-
-# /data pertenece a "node" para que un volumen nuevo herede esos permisos.
-RUN mkdir -p /data && chown node:node /data
+COPY db ./db
 
 USER node
 EXPOSE 3000
-CMD ["node", "--disable-warning=ExperimentalWarning", "src/server.js"]
+CMD ["node", "src/server.js"]

@@ -10,7 +10,8 @@ const auth = require('./auth');
 const profile = require('./profile');
 const transfers = require('./transfers');
 const chat = require('./chat');
-const { STORAGE } = require('./db');
+const db = require('./db');
+const { SerialQueue } = require('./queue');
 const avatars = require('./avatars');
 const wallet = require('./wallet');
 const { GameError, assertInt } = require('./errors');
@@ -37,8 +38,11 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.json({ limit: '10kb' }));
-// Permite comprobar desde fuera si la base de datos sobrevivirá al próximo deploy.
-app.get('/api/health', (req, res) => res.json({ ok: true, storage: STORAGE }));
+// Permite comprobar desde fuera que la app está viva y llega a MySQL.
+app.get('/api/health', async (req, res) => {
+  const database = (await db.ping()) ? 'ok' : 'unreachable';
+  res.status(database === 'ok' ? 200 : 503).json({ ok: database === 'ok', database: `mysql ${database}` });
+});
 app.use('/api', auth.router);
 app.use('/api', profile.router);
 app.use('/api', transfers.router);
@@ -86,7 +90,7 @@ const io = new Server(server, {
   },
 });
 
-const roulette = new RouletteGame(io);
+let roulette = null; // se crea en main(), tras conectar a MySQL
 
 // Resumen de todas las mesas (quién está sentado y en qué fase), agrupado para
 // no enviarlo en cada carta repartida.
@@ -138,12 +142,21 @@ transfers.events.on('sent', ({ toUserId, amount, from }) => {
   io.to(`user:${toUserId}`).emit('transfer:received', { amount, from });
 });
 
-io.use((socket, next) => {
-  const user = auth.userFromCookieHeader(socket.handshake.headers.cookie);
-  if (!user) return next(new Error('unauthorized'));
-  socket.data.user = { id: user.id, publicId: user.publicId, username: user.username };
-  next();
+io.use(async (socket, next) => {
+  try {
+    const user = await auth.userFromCookieHeader(socket.handshake.headers.cookie);
+    if (!user) return next(new Error('unauthorized'));
+    socket.data.user = { id: user.id, publicId: user.publicId, username: user.username };
+    next();
+  } catch (err) {
+    console.error('[socket] No se pudo autenticar', err);
+    next(new Error('unavailable'));
+  }
 });
+
+// Sentarse se comprueba contra todas las mesas; esta cola evita que dos pestañas
+// del mismo jugador lo sienten en dos mesas a la vez.
+const seating = new SerialQueue('seating');
 
 const connections = new Map(); // userId -> nº de sockets abiertos
 const leaveTimers = new Map();
@@ -156,11 +169,15 @@ io.on('connection', (socket) => {
 
   // Las salas de blackjack se eligen con bj:watch.
   socket.join([`user:${user.id}`, roulette.room]);
-  socket.emit('balance', { credits: wallet.getBalance(user.id) });
   socket.emit('roulette:state', roulette.publicState());
   socket.emit('roulette:bets', roulette.userBets(user.id));
   socket.emit('bj:lobby', lobbyState());
-  socket.emit('chat:history', { channel: roulette.room, messages: chat.history(roulette.room) });
+  // Lo que viene de MySQL llega un poco después; los eventos se registran antes (abajo)
+  // para no perder nada de lo que el cliente envíe nada más conectar.
+  (async () => {
+    socket.emit('balance', { credits: await wallet.getBalance(user.id) });
+    socket.emit('chat:history', { channel: roulette.room, messages: await chat.history(roulette.room) });
+  })().catch((err) => console.error('[socket] Estado inicial', err));
 
   // Limitador simple por socket para evitar spam de eventos.
   let tokens = EVENTS_PER_SECOND;
@@ -175,11 +192,11 @@ io.on('connection', (socket) => {
   };
 
   const on = (event, handler) => {
-    socket.on(event, (payload, ack) => {
+    socket.on(event, async (payload, ack) => {
       const reply = typeof ack === 'function' ? ack : () => {};
       if (!allow()) return reply({ ok: false, error: 'Vas demasiado rápido' });
       try {
-        handler(payload && typeof payload === 'object' ? payload : {});
+        await handler(payload && typeof payload === 'object' ? payload : {});
         reply({ ok: true });
       } catch (err) {
         if (!(err instanceof GameError)) console.error(`[${event}]`, err);
@@ -195,27 +212,29 @@ io.on('connection', (socket) => {
     for (const other of tables.values()) if (other !== table) socket.leave(other.room);
     socket.join(table.room);
   };
-  on('bj:watch', (p) => {
+  on('bj:watch', async (p) => {
     const table = getTable(p.table);
     watch(table);
     socket.emit('bj:state', table.publicState());
-    socket.emit('chat:history', { channel: table.room, messages: chat.history(table.room) });
+    socket.emit('chat:history', { channel: table.room, messages: await chat.history(table.room) });
   });
-  on('bj:sit', (p) => {
-    const table = getTable(p.table);
-    const current = tableOf(user.id);
-    if (current && current !== table) throw new GameError(`Ya estás sentado en la ${current.name}`);
-    watch(table); // antes de sentarse, para recibir el estado que se envía al hacerlo
-    table.sit(user, p.seat);
-  });
+  on('bj:sit', (p) =>
+    seating.run(() => {
+      const table = getTable(p.table);
+      const current = tableOf(user.id);
+      if (current && current !== table) throw new GameError(`Ya estás sentado en la ${current.name}`);
+      watch(table); // antes de sentarse, para recibir el estado que se envía al hacerlo
+      return table.sit(user, p.seat);
+    })
+  );
   on('bj:leave', () => tableOf(user.id)?.leave(user.id));
 
   // Solo se escribe en la ruleta o en la mesa que se está mirando (su sala).
-  on('chat:send', (p) => {
+  on('chat:send', async (p) => {
     const channel = p.channel;
     const allowed = channel === roulette.room || [...tables.values()].some((t) => t.room === channel && socket.rooms.has(channel));
     if (!allowed) throw new GameError('Canal de chat no válido');
-    io.to(channel).emit('chat:message', chat.post(user, channel, p.text));
+    io.to(channel).emit('chat:message', await chat.post(user, channel, p.text));
   });
   on('bj:bet', (p) => requireTable(user.id).placeBet(user, p.amount));
   on('bj:action', (p) => requireTable(user.id).act(user, p.action));
@@ -228,10 +247,23 @@ io.on('connection', (socket) => {
       user.id,
       setTimeout(() => {
         leaveTimers.delete(user.id);
-        if (!connections.has(user.id)) tableOf(user.id)?.leave(user.id);
+        if (!connections.has(user.id)) {
+          tableOf(user.id)?.leave(user.id).catch((err) => console.error('[blackjack] Al levantar al jugador', err));
+        }
       }, LEAVE_GRACE_MS)
     );
   });
 });
 
-server.listen(PORT, () => console.log(`Ksinito escuchando en http://localhost:${PORT}`));
+async function main() {
+  await db.init(); // conecta y crea las tablas de db/schema.sql si faltan
+  await auth.init();
+  await avatars.init();
+  roulette = await RouletteGame.create(io);
+  server.listen(PORT, () => console.log(`Ksinito escuchando en http://localhost:${PORT}`));
+}
+
+main().catch((err) => {
+  console.error('[inicio] No se pudo arrancar Ksinito:', err.message);
+  process.exit(1);
+});

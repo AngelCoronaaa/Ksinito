@@ -9,8 +9,8 @@ const { GameError } = require('./errors');
 
 const router = express.Router();
 
-function requireUser(req, res, next) {
-  const user = auth.userFromCookieHeader(req.headers.cookie);
+async function requireUser(req, res, next) {
+  const user = await auth.userFromCookieHeader(req.headers.cookie);
   if (!user) return res.status(401).json({ error: 'No has iniciado sesión.' });
   req.user = user;
   next();
@@ -21,12 +21,12 @@ router.put(
   requireUser,
   auth.rateLimit({ windowMs: 60 * 60 * 1000, max: 30, message: 'Has cambiado la foto demasiadas veces. Inténtalo más tarde.' }),
   express.raw({ type: avatars.MIME_TYPES, limit: avatars.MAX_BYTES }),
-  (req, res) => {
+  async (req, res) => {
     if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
       return res.status(415).json({ error: 'Sube una imagen JPG, PNG o WebP.' });
     }
     try {
-      res.json({ avatar: avatars.saveAvatar(req.user.id, req.body) });
+      res.json({ avatar: await avatars.saveAvatar(req.user.id, req.body) });
     } catch (err) {
       if (err instanceof GameError) return res.status(400).json({ error: err.message });
       throw err;
@@ -34,16 +34,16 @@ router.put(
   }
 );
 
-router.delete('/avatar', requireUser, (req, res) => {
-  avatars.removeAvatar(req.user.id);
+router.delete('/avatar', requireUser, async (req, res) => {
+  await avatars.removeAvatar(req.user.id);
   res.json({ avatar: null });
 });
 
 // Pública: los demás jugadores ven la foto en la mesa. La URL lleva ?v=versión,
 // así que se puede cachear para siempre.
-router.get('/avatar/:id', (req, res) => {
+router.get('/avatar/:id', async (req, res) => {
   const id = Number(req.params.id);
-  const row = Number.isSafeInteger(id) ? avatars.getAvatar(id) : null;
+  const row = Number.isSafeInteger(id) && id > 0 ? await avatars.getAvatar(id) : null;
   if (!row) return res.status(404).end();
   res.set({
     'Cache-Control': 'public, max-age=31536000, immutable',

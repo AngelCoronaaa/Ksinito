@@ -6,10 +6,15 @@
 // una vez (los ases divididos reciben una sola carta).
 //
 // Fases: waiting -> betting -> dealing -> playing -> dealer -> settled -> waiting ...
+//
+// Todo lo que cambia el estado pasa por `this.queue`, de una operación en una: cobrar y
+// pagar en MySQL es asíncrono y, sin la cola, un temporizador o la acción de otro
+// jugador podrían colarse mientras se espera a la base de datos.
 
 const crypto = require('node:crypto');
 const wallet = require('./wallet');
 const { avatarUrl } = require('./avatars');
+const { SerialQueue } = require('./queue');
 const { GameError, assertInt } = require('./errors');
 
 const MAX_SEATS = 15;
@@ -84,19 +89,25 @@ class BlackjackTable {
     this.endsAt = null;
     this.duration = null;
     this.timer = null;
+    this.timerGen = 0;
+    this.queue = new SerialQueue(`blackjack ${id}`);
   }
 
   // ---------- utilidades ----------
 
   schedule(ms, fn) {
     clearTimeout(this.timer);
+    // Si mientras el temporizador espera en la cola se programa otro (p. ej. el jugador
+    // pidió carta justo al acabar su tiempo), el viejo ya no debe hacer nada.
+    const gen = ++this.timerGen;
     this.endsAt = Date.now() + ms;
     this.duration = ms;
-    this.timer = setTimeout(fn, ms);
+    this.timer = setTimeout(() => this.queue.fire(() => (gen === this.timerGen ? fn() : undefined)), ms);
   }
 
   clearSchedule() {
     clearTimeout(this.timer);
+    this.timerGen++;
     this.timer = null;
     this.endsAt = null;
     this.duration = null;
@@ -174,6 +185,10 @@ class BlackjackTable {
   // ---------- asientos y apuestas ----------
 
   sit(user, seat) {
+    return this.queue.run(() => this.#sit(user, seat));
+  }
+
+  #sit(user, seat) {
     assertInt(seat, 0, this.seats.length - 1, 'El asiento');
     if (this.seatIndexOf(user.id) !== -1) throw new GameError('Ya estás sentado en esta mesa');
     if (this.seats[seat]) throw new GameError('Ese asiento está ocupado');
@@ -182,13 +197,17 @@ class BlackjackTable {
   }
 
   leave(userId) {
+    return this.queue.run(() => this.#leave(userId));
+  }
+
+  async #leave(userId) {
     const i = this.seatIndexOf(userId);
     if (i === -1) return;
     const seat = this.seats[i];
 
     if (seat.hands.length === 0) {
       // No está jugando la mano actual: se va ya (y se le devuelve la apuesta si la hizo).
-      if (seat.bet > 0) wallet.credit(userId, seat.bet, 'blackjack:refund');
+      if (seat.bet > 0) await wallet.credit(userId, seat.bet, 'blackjack:refund');
       this.seats[i] = null;
       if (this.phase === 'waiting' || this.phase === 'betting') this.checkBets();
     } else {
@@ -200,13 +219,17 @@ class BlackjackTable {
   }
 
   placeBet(user, amount) {
+    return this.queue.run(() => this.#placeBet(user, amount));
+  }
+
+  async #placeBet(user, amount) {
     if (this.phase !== 'waiting' && this.phase !== 'betting') {
       throw new GameError('La mano está en juego, espera a la siguiente');
     }
     const seat = this.seats[this.requireSeat(user.id)];
     if (seat.bet > 0) throw new GameError('Ya hiciste tu apuesta');
     assertInt(amount, MIN_BET, MAX_BET, 'La apuesta');
-    if (wallet.debit(user.id, amount, 'blackjack:bet') === null) throw new GameError('Créditos insuficientes');
+    if ((await wallet.debit(user.id, amount, 'blackjack:bet')) === null) throw new GameError('Créditos insuficientes');
     seat.bet = amount;
     this.checkBets();
     this.broadcast();
@@ -264,7 +287,7 @@ class BlackjackTable {
     this.schedule(stepMs, step);
   }
 
-  startPlay() {
+  async startPlay() {
     this.phase = 'playing';
     const players = this.seats.filter((s) => s && s.hands.length > 0);
     for (const s of players) if (isNatural(s.hands[0])) s.hands[0].done = true;
@@ -301,6 +324,10 @@ class BlackjackTable {
   }
 
   act(user, action) {
+    return this.queue.run(() => this.#act(user, action));
+  }
+
+  async #act(user, action) {
     if (this.phase !== 'playing') throw new GameError('Ahora no puedes jugar');
     const i = this.requireSeat(user.id);
     if (i !== this.turn) throw new GameError('No es tu turno');
@@ -321,7 +348,7 @@ class BlackjackTable {
         if (hand.cards.length !== 2 || hand.splitAces) {
           throw new GameError('Solo puedes doblar con tus dos primeras cartas');
         }
-        if (wallet.debit(user.id, hand.bet, 'blackjack:double') === null) throw new GameError('Créditos insuficientes');
+        if ((await wallet.debit(user.id, hand.bet, 'blackjack:double')) === null) throw new GameError('Créditos insuficientes');
         hand.bet *= 2;
         hand.doubled = true;
         hand.cards.push(this.draw());
@@ -333,7 +360,7 @@ class BlackjackTable {
         if (seat.hands.length !== 1 || hand.cards.length !== 2 || rankValue(a.r) !== rankValue(b.r)) {
           throw new GameError('Solo puedes dividir una pareja con tus dos primeras cartas');
         }
-        if (wallet.debit(user.id, hand.bet, 'blackjack:split') === null) throw new GameError('Créditos insuficientes');
+        if ((await wallet.debit(user.id, hand.bet, 'blackjack:split')) === null) throw new GameError('Créditos insuficientes');
         const aces = a.r === 'A';
         seat.hands = [a, b].map((card) => {
           const h = newHand([card, this.draw()], hand.bet, true);
@@ -363,14 +390,14 @@ class BlackjackTable {
         this.broadcast();
         this.schedule(DEALER_STEP_MS, step);
       } else {
-        this.settle();
+        return this.settle();
       }
     };
     this.broadcast();
     this.schedule(DEALER_STEP_MS, step);
   }
 
-  settle() {
+  async settle() {
     this.clearSchedule();
     this.phase = 'settled';
     this.holeHidden = false;
@@ -402,19 +429,32 @@ class BlackjackTable {
               : result === 'push'
                 ? hand.bet
                 : 0;
-        if (hand.payout > 0) wallet.credit(seat.userId, hand.payout, `blackjack:${result}`);
-      }
-      if (seat.hands.length) {
-        // Aviso privado: llega aunque el jugador esté mirando otra mesa.
-        this.io.to(`user:${seat.userId}`).emit('bj:outcome', {
-          table: this.id,
-          name: this.name,
-          bet: seat.hands.reduce((sum, h) => sum + h.bet, 0),
-          payout: seat.hands.reduce((sum, h) => sum + h.payout, 0),
-          results: seat.hands.map((h) => h.result),
-        });
       }
     }
+
+    // Se paga a todos a la vez; si un pago falla se registra y el resto sigue.
+    await Promise.all(
+      this.seats
+        .filter((seat) => seat && seat.hands.length)
+        .map(async (seat) => {
+          const payout = seat.hands.reduce((sum, h) => sum + h.payout, 0);
+          try {
+            for (const hand of seat.hands) {
+              if (hand.payout > 0) await wallet.credit(seat.userId, hand.payout, `blackjack:${hand.result}`);
+            }
+            // Aviso privado: llega aunque el jugador esté mirando otra mesa.
+            this.io.to(`user:${seat.userId}`).emit('bj:outcome', {
+              table: this.id,
+              name: this.name,
+              bet: seat.hands.reduce((sum, h) => sum + h.bet, 0),
+              payout,
+              results: seat.hands.map((h) => h.result),
+            });
+          } catch (err) {
+            console.error(`[blackjack ${this.id}] No se pudo pagar ${payout} al usuario ${seat.userId}`, err);
+          }
+        })
+    );
 
     this.schedule(RESULT_MS, () => this.resetRound());
     this.broadcast();

@@ -1,108 +1,136 @@
 'use strict';
 
+// Conexión a MySQL. Se configura con DATABASE_URL (mysql://usuario:clave@host:3306/base)
+// o con MYSQL_HOST, MYSQL_PORT, MYSQL_USER, MYSQL_PASSWORD y MYSQL_DATABASE.
+// DATABASE_SSL=1 activa TLS, que exigen los MySQL gestionados (TiDB Cloud, PlanetScale, Aiven…).
+
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
-const { DatabaseSync } = require('node:sqlite');
+const mysql = require('mysql2/promise');
 
-// En un contenedor (Docker, Coolify, Dokploy…) todo lo que no esté en un volumen
-// se borra al redesplegar, incluida la base de datos con las cuentas.
-const IN_CONTAINER = fs.existsSync('/.dockerenv') || fs.existsSync('/run/.containerenv');
+const SCHEMA_FILE = path.join(__dirname, '..', 'db', 'schema.sql');
+const CONNECT_ATTEMPTS = 30; // al arrancar, espera a que MySQL esté listo (~1 min)
 
-function mountPoints() {
+let pool = null;
+
+function connectionOptions() {
+  const url = process.env.DATABASE_URL || process.env.MYSQL_URL;
+  const target = url
+    ? { uri: url }
+    : {
+        host: process.env.MYSQL_HOST || '127.0.0.1',
+        port: Number(process.env.MYSQL_PORT) || 3306,
+        user: process.env.MYSQL_USER || 'root',
+        password: process.env.MYSQL_PASSWORD ?? '',
+        database: process.env.MYSQL_DATABASE || 'ksinito',
+      };
+  const ssl = /^(1|true|required)$/i.test(process.env.DATABASE_SSL ?? '')
+    ? { minVersion: 'TLSv1.2', rejectUnauthorized: true }
+    : undefined;
+  return {
+    ...target,
+    ssl,
+    charset: 'utf8mb4',
+    connectionLimit: Number(process.env.DATABASE_POOL_SIZE) || 10,
+    waitForConnections: true,
+    supportBigNumbers: true, // BIGINT como número mientras quepa sin perder precisión
+    enableKeepAlive: true,
+  };
+}
+
+/** Descripción de la conexión para los logs, sin la contraseña. */
+function describe() {
+  const url = process.env.DATABASE_URL || process.env.MYSQL_URL;
+  if (url) {
+    try {
+      const u = new URL(url);
+      return `${u.hostname}:${u.port || 3306}${u.pathname}`;
+    } catch {
+      return 'DATABASE_URL';
+    }
+  }
+  return `${process.env.MYSQL_HOST || '127.0.0.1'}:${process.env.MYSQL_PORT || 3306}/${process.env.MYSQL_DATABASE || 'ksinito'}`;
+}
+
+/** Sentencias de db/schema.sql, una a una (sin multipleStatements, que abre la puerta a inyecciones). */
+function schemaStatements() {
+  return fs
+    .readFileSync(SCHEMA_FILE, 'utf8')
+    .split('\n')
+    .filter((line) => !line.trim().startsWith('--'))
+    .join('\n')
+    .split(/;\s*(?:\n|$)/)
+    .map((sql) => sql.trim())
+    .filter(Boolean);
+}
+
+/** Conecta (reintentando mientras MySQL arranca) y crea las tablas que falten. */
+async function init() {
+  pool = mysql.createPool(connectionOptions());
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await pool.query('SELECT 1');
+      break;
+    } catch (err) {
+      if (attempt >= CONNECT_ATTEMPTS) throw new Error(`No se pudo conectar a MySQL en ${describe()}: ${err.message}`);
+      console.warn(`[db] MySQL en ${describe()} no responde (${err.code ?? err.message}); reintento ${attempt}/${CONNECT_ATTEMPTS}…`);
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+  }
+  for (const sql of schemaStatements()) await pool.query(sql);
+  console.log(`[db] Conectado a MySQL en ${describe()}`);
+}
+
+function requirePool() {
+  if (!pool) throw new Error('La base de datos no está inicializada (falta db.init())');
+  return pool;
+}
+
+/** Ejecuta una consulta. Devuelve las filas (SELECT) o el resultado (INSERT/UPDATE: affectedRows, insertId). */
+async function query(sql, params = []) {
+  const [result] = await requirePool().query(sql, params);
+  return result;
+}
+
+/** Primera fila de un SELECT, o null. */
+async function one(sql, params = []) {
+  const rows = await query(sql, params);
+  return rows[0] ?? null;
+}
+
+/**
+ * Ejecuta fn(tx) dentro de una transacción; hace ROLLBACK si lanza.
+ * `tx` tiene los mismos query/one pero sobre la conexión de la transacción.
+ */
+async function transaction(fn) {
+  const conn = await requirePool().getConnection();
+  const tx = {
+    query: async (sql, params = []) => (await conn.query(sql, params))[0],
+    one: async (sql, params = []) => (await conn.query(sql, params))[0][0] ?? null,
+  };
   try {
-    return fs.readFileSync('/proc/self/mountinfo', 'utf8').split('\n').map((line) => line.split(' ')[4]).filter(Boolean);
-  } catch {
-    return [];
+    await conn.beginTransaction();
+    const result = await fn(tx);
+    await conn.commit();
+    return result;
+  } catch (err) {
+    await conn.rollback().catch(() => {});
+    throw err;
+  } finally {
+    conn.release();
   }
 }
 
-function onVolume(dir) {
-  const real = fs.realpathSync(dir);
-  return mountPoints().some((m) => m !== '/' && (real === m || real.startsWith(`${m}/`)));
+/** ¿Responde la base de datos? (para /api/health) */
+async function ping() {
+  try {
+    await query('SELECT 1');
+    return true;
+  } catch {
+    return false;
+  }
 }
-
-// Si hay un volumen montado en /data se usa aunque no se haya definido DATA_DIR.
-const DATA_DIR =
-  process.env.DATA_DIR ||
-  (IN_CONTAINER && mountPoints().includes('/data') ? '/data' : path.join(__dirname, '..', 'data'));
-fs.mkdirSync(DATA_DIR, { recursive: true });
-
-/** 'persistent' (volumen), 'ephemeral' (se borra al redesplegar) o 'local' (fuera de contenedores). */
-const STORAGE = !IN_CONTAINER ? 'local' : onVolume(DATA_DIR) ? 'persistent' : 'ephemeral';
-
-const DB_FILE = path.join(DATA_DIR, 'casino.db');
-const db = new DatabaseSync(DB_FILE);
-console.log(`[db] Base de datos en ${DB_FILE} (almacenamiento: ${STORAGE})`);
-if (STORAGE === 'ephemeral') {
-  console.warn(`[db] ⚠ ATENCIÓN: ${DATA_DIR} no está en un volumen persistente.`);
-  console.warn('[db] ⚠ Las cuentas, créditos y fotos se BORRARÁN en el próximo deploy.');
-  console.warn('[db] ⚠ Añade un volumen con destino /data en Coolify/Dokploy (ver README → Despliegue).');
-}
-
-db.exec(`
-  PRAGMA journal_mode = WAL;
-  PRAGMA foreign_keys = ON;
-
-  CREATE TABLE IF NOT EXISTS users (
-    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
-    username              TEXT    NOT NULL UNIQUE COLLATE NOCASE,
-    password_hash         TEXT    NOT NULL,
-    credits               INTEGER NOT NULL DEFAULT 0 CHECK (credits >= 0),
-    welcome_bonus_granted INTEGER NOT NULL DEFAULT 0,
-    created_at            INTEGER NOT NULL
-  );
-
-  -- Las sesiones ahora son JWT (ver auth.js); esta tabla ya no se usa.
-  DROP TABLE IF EXISTS sessions;
-
-  -- Registro de cada movimiento de créditos (auditoría).
-  CREATE TABLE IF NOT EXISTS ledger (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    delta         INTEGER NOT NULL,
-    balance_after INTEGER NOT NULL,
-    reason        TEXT    NOT NULL,
-    created_at    INTEGER NOT NULL
-  );
-  CREATE INDEX IF NOT EXISTS ledger_user ON ledger(user_id, id);
-
-  -- Fotos de perfil (ver avatars.js). Viven en la misma base que las cuentas.
-  CREATE TABLE IF NOT EXISTS avatars (
-    user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-    mime       TEXT    NOT NULL,
-    data       BLOB    NOT NULL,
-    updated_at INTEGER NOT NULL
-  );
-
-  -- Solo se conservan los últimos 30 giros (ver roulette.js).
-  CREATE TABLE IF NOT EXISTS roulette_spins (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    number     INTEGER NOT NULL CHECK (number BETWEEN 0 AND 36),
-    created_at INTEGER NOT NULL
-  );
-
-  -- Chat de la ruleta y de cada mesa de blackjack (ver chat.js).
-  CREATE TABLE IF NOT EXISTS chat_messages (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    channel    TEXT    NOT NULL,
-    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    text       TEXT    NOT NULL,
-    created_at INTEGER NOT NULL
-  );
-  CREATE INDEX IF NOT EXISTS chat_channel ON chat_messages(channel, id);
-
-  -- Envíos de créditos entre jugadores (ver wallet.transfer).
-  CREATE TABLE IF NOT EXISTS transfers (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    from_user  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    to_user    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    amount     INTEGER NOT NULL CHECK (amount > 0),
-    created_at INTEGER NOT NULL
-  );
-  CREATE INDEX IF NOT EXISTS transfers_from ON transfers(from_user, id);
-  CREATE INDEX IF NOT EXISTS transfers_to ON transfers(to_user, id);
-`);
 
 // ---------- ID público de cada jugador ----------
 // Número de 8 cifras, aleatorio para que no se pueda adivinar ni equivocarse con
@@ -110,41 +138,16 @@ db.exec(`
 
 const newPublicId = () => String(crypto.randomInt(10_000_000, 100_000_000));
 
-if (!db.prepare('PRAGMA table_info(users)').all().some((c) => c.name === 'public_id')) {
-  db.exec('ALTER TABLE users ADD COLUMN public_id TEXT');
-}
-db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_public_id ON users(public_id)');
-
 /** Ejecuta insert(publicId) con IDs nuevos hasta que no choque con uno existente. */
-function withPublicId(insert) {
+async function withPublicId(insert) {
   for (let attempt = 0; ; attempt++) {
-    const publicId = newPublicId();
     try {
-      return insert(publicId);
+      return await insert(newPublicId());
     } catch (err) {
-      if (attempt < 10 && String(err.message).includes('users.public_id')) continue;
+      if (attempt < 10 && err.code === 'ER_DUP_ENTRY' && String(err.message).includes('public_id')) continue;
       throw err;
     }
   }
 }
 
-// Las cuentas creadas antes de existir el ID reciben uno ahora.
-const setPublicId = db.prepare('UPDATE users SET public_id = ? WHERE id = ?');
-for (const { id } of db.prepare('SELECT id FROM users WHERE public_id IS NULL').all()) {
-  withPublicId((publicId) => setPublicId.run(publicId, id));
-}
-
-/** Ejecuta fn dentro de una transacción; hace ROLLBACK si lanza. */
-function transaction(fn) {
-  db.exec('BEGIN IMMEDIATE');
-  try {
-    const result = fn();
-    db.exec('COMMIT');
-    return result;
-  } catch (err) {
-    db.exec('ROLLBACK');
-    throw err;
-  }
-}
-
-module.exports = { db, transaction, withPublicId, DATA_DIR, STORAGE };
+module.exports = { init, query, one, transaction, ping, withPublicId, describe };

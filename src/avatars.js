@@ -5,7 +5,7 @@
 // para rechazar imágenes enormes que colgarían el navegador de otros jugadores.
 
 const { EventEmitter } = require('node:events');
-const { db } = require('./db');
+const { query, one } = require('./db');
 const { GameError } = require('./errors');
 
 const MAX_BYTES = 300 * 1024;
@@ -14,17 +14,23 @@ const MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 const events = new EventEmitter();
 
-const stmts = {
-  version: db.prepare('SELECT updated_at FROM avatars WHERE user_id = ?'),
-  get: db.prepare('SELECT mime, data FROM avatars WHERE user_id = ?'),
-  upsert: db.prepare(`
+const SQL = {
+  versions: 'SELECT user_id, updated_at FROM avatars',
+  get: 'SELECT mime, data FROM avatars WHERE user_id = ?',
+  upsert: `
     INSERT INTO avatars (user_id, mime, data, updated_at) VALUES (?, ?, ?, ?)
-    ON CONFLICT(user_id) DO UPDATE SET mime = excluded.mime, data = excluded.data, updated_at = excluded.updated_at`),
-  remove: db.prepare('DELETE FROM avatars WHERE user_id = ?'),
+    ON DUPLICATE KEY UPDATE mime = VALUES(mime), data = VALUES(data), updated_at = VALUES(updated_at)`,
+  remove: 'DELETE FROM avatars WHERE user_id = ?',
 };
 
-// userId -> updated_at (o null si no tiene foto). Evita consultar la base en cada broadcast.
+// userId -> updated_at de su foto. Se carga entero al arrancar para que avatarUrl() sea
+// inmediato: la mesa de blackjack lo llama en cada actualización. Todas las fotos se
+// cambian a través de este proceso, así que la copia en memoria no se queda vieja.
 const versions = new Map();
+
+async function init() {
+  for (const row of await query(SQL.versions)) versions.set(Number(row.user_id), Number(row.updated_at));
+}
 
 function jpegSize(buf) {
   let i = 2;
@@ -82,16 +88,15 @@ function imageInfo(buf) {
 
 /** URL pública de la foto (con versión para poder cachearla), o null. */
 function avatarUrl(userId) {
-  if (!versions.has(userId)) versions.set(userId, stmts.version.get(userId)?.updated_at ?? null);
   const version = versions.get(userId);
-  return version === null ? null : `/api/avatar/${userId}?v=${version}`;
+  return version === undefined ? null : `/api/avatar/${userId}?v=${version}`;
 }
 
 function getAvatar(userId) {
-  return stmts.get.get(userId) ?? null;
+  return one(SQL.get, [userId]);
 }
 
-function saveAvatar(userId, buf) {
+async function saveAvatar(userId, buf) {
   const info = imageInfo(buf);
   if (!info) throw new GameError('Formato no válido: usa una imagen JPG, PNG o WebP.');
   if (!info.width || !info.height || info.width > MAX_SIDE || info.height > MAX_SIDE) {
@@ -99,17 +104,17 @@ function saveAvatar(userId, buf) {
   }
   // La versión cambia siempre, aunque se suban dos fotos en el mismo milisegundo.
   const version = Math.max(Date.now(), (versions.get(userId) ?? 0) + 1);
-  stmts.upsert.run(userId, info.mime, buf, version);
+  await query(SQL.upsert, [userId, info.mime, buf, version]);
   versions.set(userId, version);
   const url = avatarUrl(userId);
   events.emit('change', userId, url);
   return url;
 }
 
-function removeAvatar(userId) {
-  stmts.remove.run(userId);
-  versions.set(userId, null);
+async function removeAvatar(userId) {
+  await query(SQL.remove, [userId]);
+  versions.delete(userId);
   events.emit('change', userId, null);
 }
 
-module.exports = { events, avatarUrl, getAvatar, saveAvatar, removeAvatar, imageInfo, MAX_BYTES, MIME_TYPES };
+module.exports = { init, events, avatarUrl, getAvatar, saveAvatar, removeAvatar, imageInfo, MAX_BYTES, MIME_TYPES };

@@ -4,7 +4,7 @@
 // Los canales coinciden con las salas de Socket.IO, así que server.js decide
 // quién puede escribir en cada uno según las salas del socket.
 
-const { db } = require('./db');
+const { query } = require('./db');
 const avatars = require('./avatars');
 const { GameError } = require('./errors');
 
@@ -14,36 +14,37 @@ const KEEP = 200; // mensajes que se guardan por canal
 const BURST = 5; // máximo de mensajes…
 const BURST_MS = 8_000; // …en esta ventana, por jugador
 
-const stmts = {
-  insert: db.prepare('INSERT INTO chat_messages (channel, user_id, text, created_at) VALUES (?, ?, ?, ?)'),
-  recent: db.prepare(`
+const SQL = {
+  insert: 'INSERT INTO chat_messages (channel, user_id, text, created_at) VALUES (?, ?, ?, ?)',
+  recent: `
     SELECT m.id, m.channel, m.user_id, m.text, m.created_at, u.username, u.public_id
     FROM chat_messages m JOIN users u ON u.id = m.user_id
-    WHERE m.channel = ? ORDER BY m.id DESC LIMIT ?`),
-  trim: db.prepare(`
+    WHERE m.channel = ? ORDER BY m.id DESC LIMIT ?`,
+  // MySQL no deja usar LIMIT dentro de un IN/subconsulta directa; va en una tabla derivada.
+  trim: `
     DELETE FROM chat_messages WHERE channel = ? AND id <= (
-      SELECT id FROM chat_messages WHERE channel = ? ORDER BY id DESC LIMIT 1 OFFSET ?)`),
+      SELECT id FROM (SELECT id FROM chat_messages WHERE channel = ? ORDER BY id DESC LIMIT 1 OFFSET ?) AS cutoff)`,
 };
 
 const recentByUser = new Map(); // userId -> marcas de tiempo de sus últimos mensajes
 
 const toMessage = (row) => ({
-  id: row.id,
+  id: Number(row.id),
   channel: row.channel,
-  userId: row.user_id,
+  userId: Number(row.user_id),
   publicId: row.public_id,
   username: row.username,
-  avatar: avatars.avatarUrl(row.user_id),
+  avatar: avatars.avatarUrl(Number(row.user_id)),
   text: row.text,
-  at: row.created_at,
+  at: Number(row.created_at),
 });
 
-function history(channel) {
-  return stmts.recent.all(channel, HISTORY).reverse().map(toMessage);
+async function history(channel) {
+  return (await query(SQL.recent, [channel, HISTORY])).reverse().map(toMessage);
 }
 
 /** Guarda un mensaje y lo devuelve listo para enviar a la sala. */
-function post(user, channel, text) {
+async function post(user, channel, text) {
   if (typeof text !== 'string') throw new GameError('Mensaje vacío');
   // Sin caracteres de control ni saltos de línea; el cliente lo pinta como texto plano.
   const clean = text.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -56,8 +57,8 @@ function post(user, channel, text) {
   times.push(now);
   recentByUser.set(user.id, times);
 
-  const id = Number(stmts.insert.run(channel, user.id, clean, now).lastInsertRowid);
-  if (id % 20 === 0) stmts.trim.run(channel, channel, KEEP);
+  const id = Number((await query(SQL.insert, [channel, user.id, clean, now])).insertId);
+  if (id % 20 === 0) await query(SQL.trim, [channel, channel, KEEP]);
   return toMessage({ id, channel, user_id: user.id, text: clean, created_at: now, username: user.username, public_id: user.publicId });
 }
 
