@@ -152,7 +152,6 @@ const router = express.Router();
 
 router.post(
   '/register',
-  rateLimit({ windowMs: 60 * 60 * 1000, max: 5, message: 'Demasiadas cuentas creadas desde tu red. Inténtalo más tarde.' }),
   async (req, res) => {
     const { username, password } = readCredentials(req.body);
     if (!USERNAME_RE.test(username)) {

@@ -60,7 +60,6 @@ o sin él. Para evitarlo:
   (entero, límites, fase del juego, turno, saldo), baraja, reparte, gira la ruleta con
   `crypto.randomInt` y calcula los pagos. No existe ningún endpoint ni evento que sume
   créditos. La carta tapada del crupier nunca se envía al cliente hasta que se revela.
-- Para dificultar el farmeo de cuentas hay un límite de 5 registros por hora por IP.
 
 ## Ruleta
 

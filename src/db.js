@@ -10,6 +10,27 @@ fs.mkdirSync(DATA_DIR, { recursive: true });
 const DB_FILE = path.join(DATA_DIR, 'casino.db');
 const db = new DatabaseSync(DB_FILE);
 console.log(`[db] Base de datos en ${DB_FILE}`);
+warnIfEphemeral(DATA_DIR);
+
+/**
+ * En un contenedor (Docker, Coolify, Dokploy…) todo lo que no esté en un volumen
+ * se borra al redesplegar. Avisa si DATA_DIR no está dentro de un punto de montaje.
+ */
+function warnIfEphemeral(dir) {
+  if (!fs.existsSync('/.dockerenv') && !fs.existsSync('/run/.containerenv')) return;
+  let mountPoints;
+  try {
+    mountPoints = fs.readFileSync('/proc/self/mountinfo', 'utf8').split('\n').map((line) => line.split(' ')[4]).filter(Boolean);
+  } catch {
+    return;
+  }
+  const real = fs.realpathSync(dir);
+  const persistent = mountPoints.some((m) => m !== '/' && (real === m || real.startsWith(`${m}/`)));
+  if (persistent) return;
+  console.warn(`[db] ⚠ ATENCIÓN: ${real} no está en un volumen persistente.`);
+  console.warn('[db] ⚠ Las cuentas, créditos y fotos se BORRARÁN en el próximo deploy.');
+  console.warn('[db] ⚠ Monta un volumen en /data y define DATA_DIR=/data (ver README → Despliegue).');
+}
 
 db.exec(`
   PRAGMA journal_mode = WAL;
