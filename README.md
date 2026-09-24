@@ -32,13 +32,17 @@ Variables de entorno opcionales:
 
 ## Despliegue: que no se pierdan las cuentas
 
-Las cuentas y los créditos viven en `DATA_DIR/casino.db`. Si la plataforma borra el disco en
-cada despliegue (Render, Railway, Fly… sin volumen), **se pierden todos los usuarios**, con JWT
-o sin él. Para evitarlo:
+Las cuentas, créditos, fotos, chat y transferencias viven en la base SQLite `casino.db`. En
+Coolify/Dokploy cada deploy crea un **contenedor nuevo** y borra todo lo que no esté en un
+volumen, así que hay que darle uno a la base:
 
-1. Crea un disco/volumen persistente en la plataforma y móntalo, por ejemplo, en `/var/data`.
-2. Define `DATA_DIR=/var/data` y un `JWT_SECRET` fijo (p. ej. `openssl rand -base64 48`).
-3. Al arrancar, el log muestra `[db] Base de datos en …`: comprueba que apunta al volumen.
+1. En la app, añade un volumen persistente con destino **`/data`**
+   (Coolify: *Persistent Storage* → *Add*; Dokploy: *Advanced* → *Volumes* → *Volume Mount*).
+2. Añade la variable `JWT_SECRET` con un valor fijo de 32 caracteres o más.
+3. Redespliega y abre **`/api/health`**: debe decir `"storage":"persistent"`. Si dice
+   `"ephemeral"`, la base se borrará en el próximo deploy.
+
+Si hay un volumen montado en `/data`, la app lo usa sola aunque no definas `DATA_DIR`.
 
 ## Perfil
 
@@ -48,6 +52,16 @@ o sin él. Para evitarlo:
   de hasta 300 KB y 1024×1024 px. Las fotos se guardan en la tabla `avatars` de la misma base de
   datos, así que se conservan igual que las cuentas (ver "Despliegue").
 - Los demás jugadores ven tu foto, tu nombre y tu apuesta en la mesa de blackjack.
+
+## ID de jugador, transferencias y chat
+
+- Cada cuenta tiene un **ID de 8 cifras** (aparece en tu perfil y en *Enviar créditos*).
+- Con el botón de enviar (arriba, junto a tus créditos) mandas créditos a otro jugador con su
+  ID y la cantidad. Antes de enviar se muestra su nombre y foto para confirmar. El envío es
+  atómico: o se mueven los créditos de los dos, o no cambia nada. El que recibe ve un aviso al
+  momento. Pulsar un nombre en el chat abre el envío con su ID ya puesto.
+- El chat (botón flotante abajo a la derecha) tiene un canal para la ruleta y otro por cada
+  mesa de blackjack. Se guardan los últimos 200 mensajes por canal.
 
 ## Créditos
 

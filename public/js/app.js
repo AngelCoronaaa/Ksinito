@@ -378,7 +378,24 @@
           g.classList.add('game-enter');
         }
       });
-      if (btn.dataset.tab === 'roulette') window.RouletteUI.resize();
+      if (btn.dataset.tab === 'roulette') {
+        window.RouletteUI.resize();
+        window.ChatUI.setChannel('roulette', 'Ruleta');
+      } else {
+        const { channel, label } = window.BlackjackUI.chatChannel();
+        window.ChatUI.setChannel(channel, label);
+      }
+    });
+  });
+
+  document.querySelectorAll('[data-copy-id]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(me.publicId);
+        toast(`ID ${me.publicId} copiado`, 'success');
+      } catch {
+        toast(`Tu ID es ${me.publicId}`);
+      }
     });
   });
 
@@ -390,6 +407,8 @@
     me = user;
     $('#username').textContent = user.username;
     $('#profile-name').textContent = user.username;
+    document.querySelectorAll('.my-public-id').forEach((el) => { el.textContent = user.publicId; });
+    document.querySelector('.user-chip').title = `Tu perfil · ID ${user.publicId}`;
     setMyAvatar(user.avatar);
     setCredits(user.credits);
 
@@ -401,7 +420,14 @@
     });
     socket.on('disconnect', () => toast('Conexión perdida, reconectando…', 'error'));
 
-    const ctx = { socket, emit, toast, celebrate, renderChips, avatar: avatarEl, reducedMotion, user };
+    const ctx = {
+      socket, emit, api, toast, celebrate, renderChips, avatar: avatarEl, reducedMotion, user,
+      credits: () => credits,
+      chat: window.ChatUI,
+      transfer: window.TransferUI,
+    };
+    window.ChatUI.init(ctx);
+    window.TransferUI.init(ctx);
     window.RouletteUI.init(ctx);
     window.BlackjackUI.init(ctx);
   }

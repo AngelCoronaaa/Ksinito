@@ -2,7 +2,8 @@
 
 // Único módulo que modifica créditos. No hay ningún endpoint ni evento de
 // socket que permita al cliente sumarse créditos: solo el bono de bienvenida
-// (una vez por cuenta) y los pagos que calculan los juegos en el servidor.
+// (una vez por cuenta), los pagos que calculan los juegos en el servidor y las
+// transferencias entre jugadores (que solo mueven créditos, nunca los crean).
 
 const { EventEmitter } = require('node:events');
 const { db, transaction } = require('./db');
@@ -21,6 +22,7 @@ const stmts = {
   ledger: db.prepare(
     'INSERT INTO ledger (user_id, delta, balance_after, reason, created_at) VALUES (?, ?, ?, ?, ?)'
   ),
+  transfer: db.prepare('INSERT INTO transfers (from_user, to_user, amount, created_at) VALUES (?, ?, ?, ?)'),
 };
 
 function assertAmount(amount) {
@@ -61,4 +63,29 @@ function grantWelcomeBonus(userId) {
   return apply(userId, WELCOME_BONUS, 'welcome_bonus', () => stmts.bonus.run(WELCOME_BONUS, userId)) !== null;
 }
 
-module.exports = { events, getBalance, debit, credit, grantWelcomeBonus, WELCOME_BONUS };
+/**
+ * Pasa créditos de un jugador a otro de forma atómica: o se mueven los dos
+ * saldos (con su asiento contable) o no cambia nada. Devuelve el saldo del
+ * que envía, o null si no le alcanza.
+ */
+function transfer(fromId, toId, amount) {
+  assertAmount(amount);
+  if (fromId === toId) throw new Error('Transferencia a uno mismo');
+  const result = transaction(() => {
+    if (stmts.debit.run(amount, fromId, amount).changes === 0) return null;
+    if (stmts.credit.run(amount, toId).changes === 0) throw new Error(`Destinatario inexistente: ${toId}`);
+    const now = Date.now();
+    const transferId = Number(stmts.transfer.run(fromId, toId, amount, now).lastInsertRowid);
+    const fromAfter = getBalance(fromId);
+    const toAfter = getBalance(toId);
+    stmts.ledger.run(fromId, -amount, fromAfter, `transfer:out:${transferId}`, now);
+    stmts.ledger.run(toId, amount, toAfter, `transfer:in:${transferId}`, now);
+    return { fromAfter, toAfter };
+  });
+  if (!result) return null;
+  events.emit('balance', fromId, result.fromAfter);
+  events.emit('balance', toId, result.toAfter);
+  return result.fromAfter;
+}
+
+module.exports = { events, getBalance, debit, credit, transfer, grantWelcomeBonus, WELCOME_BONUS };

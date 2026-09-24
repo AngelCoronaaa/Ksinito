@@ -8,6 +8,9 @@ const express = require('express');
 const { Server } = require('socket.io');
 const auth = require('./auth');
 const profile = require('./profile');
+const transfers = require('./transfers');
+const chat = require('./chat');
+const { STORAGE } = require('./db');
 const avatars = require('./avatars');
 const wallet = require('./wallet');
 const { GameError, assertInt } = require('./errors');
@@ -34,8 +37,11 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.json({ limit: '10kb' }));
+// Permite comprobar desde fuera si la base de datos sobrevivirá al próximo deploy.
+app.get('/api/health', (req, res) => res.json({ ok: true, storage: STORAGE }));
 app.use('/api', auth.router);
 app.use('/api', profile.router);
+app.use('/api', transfers.router);
 
 // Librerías del cliente servidas desde node_modules (mismo origen, sin CDN).
 const vendor = (pkg, dir = '') =>
@@ -127,10 +133,15 @@ avatars.events.on('change', (userId, avatar) => {
   tableOf(userId)?.broadcast();
 });
 
+// El que recibe créditos se entera al momento, esté en la pestaña que esté.
+transfers.events.on('sent', ({ toUserId, amount, from }) => {
+  io.to(`user:${toUserId}`).emit('transfer:received', { amount, from });
+});
+
 io.use((socket, next) => {
   const user = auth.userFromCookieHeader(socket.handshake.headers.cookie);
   if (!user) return next(new Error('unauthorized'));
-  socket.data.user = { id: user.id, username: user.username };
+  socket.data.user = { id: user.id, publicId: user.publicId, username: user.username };
   next();
 });
 
@@ -149,6 +160,7 @@ io.on('connection', (socket) => {
   socket.emit('roulette:state', roulette.publicState());
   socket.emit('roulette:bets', roulette.userBets(user.id));
   socket.emit('bj:lobby', lobbyState());
+  socket.emit('chat:history', { channel: roulette.room, messages: chat.history(roulette.room) });
 
   // Limitador simple por socket para evitar spam de eventos.
   let tokens = EVENTS_PER_SECOND;
@@ -187,6 +199,7 @@ io.on('connection', (socket) => {
     const table = getTable(p.table);
     watch(table);
     socket.emit('bj:state', table.publicState());
+    socket.emit('chat:history', { channel: table.room, messages: chat.history(table.room) });
   });
   on('bj:sit', (p) => {
     const table = getTable(p.table);
@@ -196,6 +209,14 @@ io.on('connection', (socket) => {
     table.sit(user, p.seat);
   });
   on('bj:leave', () => tableOf(user.id)?.leave(user.id));
+
+  // Solo se escribe en la ruleta o en la mesa que se está mirando (su sala).
+  on('chat:send', (p) => {
+    const channel = p.channel;
+    const allowed = channel === roulette.room || [...tables.values()].some((t) => t.room === channel && socket.rooms.has(channel));
+    if (!allowed) throw new GameError('Canal de chat no válido');
+    io.to(channel).emit('chat:message', chat.post(user, channel, p.text));
+  });
   on('bj:bet', (p) => requireTable(user.id).placeBet(user, p.amount));
   on('bj:action', (p) => requireTable(user.id).act(user, p.action));
 

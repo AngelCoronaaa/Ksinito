@@ -11,7 +11,7 @@ const path = require('node:path');
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { db, DATA_DIR } = require('./db');
+const { db, withPublicId, DATA_DIR } = require('./db');
 const wallet = require('./wallet');
 const avatars = require('./avatars');
 
@@ -25,9 +25,9 @@ const DUMMY_HASH = bcrypt.hashSync('dummy-password', 10);
 const JWT_SECRET = loadSecret();
 
 const stmts = {
-  userByName: db.prepare('SELECT id, username, password_hash, created_at FROM users WHERE username = ?'),
-  userById: db.prepare('SELECT id, username, created_at FROM users WHERE id = ?'),
-  insertUser: db.prepare('INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)'),
+  userByName: db.prepare('SELECT id, public_id, username, password_hash, created_at FROM users WHERE username = ?'),
+  userById: db.prepare('SELECT id, public_id, username, created_at FROM users WHERE id = ?'),
+  insertUser: db.prepare('INSERT INTO users (username, password_hash, public_id, created_at) VALUES (?, ?, ?, ?)'),
 };
 
 /**
@@ -90,13 +90,13 @@ function verifyToken(token) {
   }
   const user = stmts.userById.get(Number(claims.sub));
   if (!user || user.created_at !== claims.ca) return null;
-  return { id: user.id, username: user.username, iat: claims.iat };
+  return { id: user.id, publicId: user.public_id, username: user.username, iat: claims.iat };
 }
 
 /** Devuelve { id, username } a partir de la cabecera Cookie, o null. */
 function userFromCookieHeader(header) {
   const user = verifyToken(parseCookies(header)[TOKEN_COOKIE]);
-  return user && { id: user.id, username: user.username };
+  return user && { id: user.id, publicId: user.publicId, username: user.username };
 }
 
 function setTokenCookie(res, user) {
@@ -110,7 +110,13 @@ function setTokenCookie(res, user) {
 }
 
 function publicUser(user) {
-  return { id: user.id, username: user.username, credits: wallet.getBalance(user.id), avatar: avatars.avatarUrl(user.id) };
+  return {
+    id: user.id,
+    publicId: user.publicId ?? user.public_id,
+    username: user.username,
+    credits: wallet.getBalance(user.id),
+    avatar: avatars.avatarUrl(user.id),
+  };
 }
 
 /** Al iniciar sesión se entrega el bono (solo la primera vez por cuenta). */
@@ -123,7 +129,8 @@ function loginResponse(res, user) {
   });
 }
 
-function rateLimit({ windowMs, max, message }) {
+/** Limita peticiones por IP, o por lo que devuelva `key` (p. ej. el usuario). */
+function rateLimit({ windowMs, max, message, key = (req) => req.ip }) {
   const hits = new Map();
   setInterval(() => {
     const now = Date.now();
@@ -132,10 +139,11 @@ function rateLimit({ windowMs, max, message }) {
 
   return (req, res, next) => {
     const now = Date.now();
-    let entry = hits.get(req.ip);
+    const id = key(req);
+    let entry = hits.get(id);
     if (!entry || entry.reset <= now) {
       entry = { count: 0, reset: now + windowMs };
-      hits.set(req.ip, entry);
+      hits.set(id, entry);
     }
     if (++entry.count > max) return res.status(429).json({ error: message });
     next();
@@ -164,14 +172,19 @@ router.post(
 
     const hash = await bcrypt.hash(password, 10);
     const createdAt = Date.now();
-    let id;
+    let user;
     try {
-      id = Number(stmts.insertUser.run(username, hash, createdAt).lastInsertRowid);
+      user = withPublicId((publicId) => ({
+        id: Number(stmts.insertUser.run(username, hash, publicId, createdAt).lastInsertRowid),
+        public_id: publicId,
+        username,
+        created_at: createdAt,
+      }));
     } catch (err) {
-      if (String(err.message).includes('UNIQUE')) return res.status(409).json({ error: 'Ese usuario ya existe.' });
+      if (String(err.message).includes('users.username')) return res.status(409).json({ error: 'Ese usuario ya existe.' });
       throw err;
     }
-    loginResponse(res, { id, username, created_at: createdAt });
+    loginResponse(res, user);
   }
 );
 

@@ -382,6 +382,8 @@ window.BlackjackUI = (() => {
     );
   }
 
+  const chatChannel = () => ({ channel: `bj:${currentTable}`, label: `Mesa ${currentTable}` });
+
   /** Cambia la mesa que se está mirando. */
   async function watch(id) {
     if (id !== currentTable) {
@@ -399,6 +401,11 @@ window.BlackjackUI = (() => {
       $('#bj-hint').textContent = '';
       for (const sel of ['#bj-bet', '#bj-actions', '#bj-leave']) $(sel).classList.add('hidden');
       renderTables();
+      // Cada mesa tiene su chat; solo se cambia si se está viendo el blackjack.
+      if (!$('#blackjack').classList.contains('hidden')) {
+        const { channel, label } = chatChannel();
+        ctx.chat.setChannel(channel, label);
+      }
     }
     const res = await ctx.emit('bj:watch', { table: id });
     if (!res.ok) ctx.toast(res.error, 'error');
@@ -484,5 +491,5 @@ window.BlackjackUI = (() => {
     setInterval(tick, 150);
   }
 
-  return { init };
+  return { init, chatChannel };
 })();

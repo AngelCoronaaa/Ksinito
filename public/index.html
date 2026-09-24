@@ -72,6 +72,9 @@
             <i class="bi bi-coin"></i><span id="credits">0</span>
             <span id="credits-delta" class="credits-delta"></span>
           </div>
+          <button type="button" id="transfer-open" class="btn btn-glass btn-icon" title="Enviar créditos" aria-label="Enviar créditos">
+            <i class="bi bi-send-fill"></i>
+          </button>
           <button type="button" class="user-chip" data-bs-toggle="modal" data-bs-target="#profile-modal" title="Tu perfil">
             <span id="avatar" class="avatar" aria-hidden="true"></span>
             <span id="username" class="username"></span>
@@ -192,6 +195,10 @@
               <div id="avatar-busy" class="avatar-busy hidden"><span class="spinner-border" aria-label="Subiendo"></span></div>
             </div>
             <div id="profile-name" class="profile-name"></div>
+            <div class="id-pill mt-2">
+              <span>Tu ID</span><strong class="my-public-id"></strong>
+              <button type="button" class="btn-copy" data-copy-id title="Copiar ID" aria-label="Copiar tu ID"><i class="bi bi-copy"></i></button>
+            </div>
             <p class="profile-hint">Sube una foto o arrástrala aquí. La recortamos en cuadrado y la verán los demás jugadores en la mesa.</p>
             <input type="file" id="avatar-input" accept="image/*" class="visually-hidden">
             <div class="d-flex gap-2 justify-content-center flex-wrap">
@@ -204,6 +211,69 @@
       </div>
     </div>
 
+    <div class="modal fade" id="transfer-modal" tabindex="-1" aria-labelledby="transfer-title" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content profile-modal">
+          <div class="modal-header border-0 pb-0">
+            <h2 class="modal-title panel-title" id="transfer-title"><i class="bi bi-send-fill me-1"></i>Enviar créditos</h2>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          </div>
+          <div class="modal-body transfer-body">
+            <div class="id-pill mb-3">
+              <span>Tu ID para recibir</span><strong class="my-public-id"></strong>
+              <button type="button" class="btn-copy" data-copy-id title="Copiar ID" aria-label="Copiar tu ID"><i class="bi bi-copy"></i></button>
+            </div>
+            <form id="transfer-form" novalidate>
+              <div class="form-floating mb-2">
+                <input class="form-control" id="transfer-to" name="to" inputmode="numeric" maxlength="8"
+                       placeholder="ID del jugador" autocomplete="off" required>
+                <label for="transfer-to"><i class="bi bi-person-vcard me-1"></i>ID del jugador (8 cifras)</label>
+              </div>
+              <div id="transfer-recipient" class="transfer-recipient" aria-live="polite"></div>
+              <div class="form-floating mb-2">
+                <input class="form-control" id="transfer-amount" name="amount" type="number" inputmode="numeric"
+                       min="1" step="1" placeholder="Cantidad" required>
+                <label for="transfer-amount"><i class="bi bi-coin me-1"></i>Cantidad</label>
+              </div>
+              <div class="transfer-quick">
+                <button type="button" class="btn btn-glass" data-amount="10">10</button>
+                <button type="button" class="btn btn-glass" data-amount="50">50</button>
+                <button type="button" class="btn btn-glass" data-amount="100">100</button>
+                <button type="button" class="btn btn-glass" data-amount="all">Todo</button>
+              </div>
+              <p id="transfer-error" class="error" role="alert"></p>
+              <button type="submit" id="transfer-submit" class="btn btn-gold btn-lg w-100" disabled>
+                <i class="bi bi-send me-1"></i><span id="transfer-submit-label">Enviar</span>
+              </button>
+            </form>
+            <h3 class="panel-title mt-4 mb-2"><i class="bi bi-clock-history me-1"></i>Últimos movimientos</h3>
+            <ul id="transfer-history" class="transfer-history"></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-dock">
+      <section id="chat-panel" class="chat-panel hidden" aria-label="Chat">
+        <header class="chat-head">
+          <div>
+            <span class="panel-title"><i class="bi bi-chat-dots me-1"></i>Chat</span>
+            <span id="chat-channel" class="chat-channel">Ruleta</span>
+          </div>
+          <button type="button" id="chat-close" class="btn-close" aria-label="Cerrar chat"></button>
+        </header>
+        <div id="chat-messages" class="chat-messages" aria-live="polite"></div>
+        <form id="chat-form" class="chat-form">
+          <input id="chat-input" class="form-control" maxlength="300" placeholder="Escribe un mensaje…" autocomplete="off" aria-label="Mensaje">
+          <button type="submit" class="btn btn-gold btn-icon" aria-label="Enviar mensaje"><i class="bi bi-send-fill"></i></button>
+        </form>
+      </section>
+      <button type="button" id="chat-toggle" class="btn btn-gold chat-fab" aria-expanded="false" aria-controls="chat-panel" aria-label="Abrir chat">
+        <i class="bi bi-chat-dots-fill"></i>
+        <span id="chat-unread" class="chat-unread hidden">0</span>
+      </button>
+    </div>
+
     <div id="toasts" class="toast-container position-fixed bottom-0 start-50 translate-middle-x p-3"></div>
     <div id="celebrate" class="celebrate" aria-live="polite"></div>
     <canvas id="confetti-canvas" class="confetti-canvas" aria-hidden="true"></canvas>
@@ -214,6 +284,8 @@
   <script src="/vendor/confetti/confetti.browser.js"></script>
   <script src="/js/roulette.js"></script>
   <script src="/js/blackjack.js"></script>
+  <script src="/js/chat.js"></script>
+  <script src="/js/transfer.js"></script>
   <script src="/js/app.js"></script>
 </body>
 </html>
