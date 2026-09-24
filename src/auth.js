@@ -1,28 +1,56 @@
 'use strict';
 
+// Autenticación con JWT (HS256) guardado en una cookie httpOnly.
+// El token no se guarda en la base de datos: el servidor solo necesita el
+// secreto para verificarlo, así que las sesiones sobreviven a reinicios y
+// redespliegues siempre que JWT_SECRET sea el mismo.
+
 const crypto = require('node:crypto');
+const fs = require('node:fs');
+const path = require('node:path');
 const express = require('express');
 const bcrypt = require('bcryptjs');
-const { db } = require('./db');
+const jwt = require('jsonwebtoken');
+const { db, DATA_DIR } = require('./db');
 const wallet = require('./wallet');
 
-const SESSION_COOKIE = 'ksid';
-const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const TOKEN_COOKIE = 'ksjwt';
+const TOKEN_TTL_S = 7 * 24 * 60 * 60;
+const TOKEN_REFRESH_AFTER_S = 24 * 60 * 60; // /api/me renueva el token si tiene más de un día
+const ISSUER = 'ksinito';
 const USERNAME_RE = /^[A-Za-z0-9_]{3,20}$/;
 const DUMMY_HASH = bcrypt.hashSync('dummy-password', 10);
 
+const JWT_SECRET = loadSecret();
+
 const stmts = {
-  userByName: db.prepare('SELECT id, username, password_hash FROM users WHERE username = ?'),
+  userByName: db.prepare('SELECT id, username, password_hash, created_at FROM users WHERE username = ?'),
+  userById: db.prepare('SELECT id, username, created_at FROM users WHERE id = ?'),
   insertUser: db.prepare('INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)'),
-  insertSession: db.prepare('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)'),
-  sessionUser: db.prepare(`
-    SELECT u.id, u.username FROM sessions s JOIN users u ON u.id = s.user_id
-    WHERE s.token_hash = ? AND s.expires_at > ?`),
-  deleteSession: db.prepare('DELETE FROM sessions WHERE token_hash = ?'),
-  purgeSessions: db.prepare('DELETE FROM sessions WHERE expires_at <= ?'),
 };
 
-const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
+/**
+ * Usa JWT_SECRET si está definido. Si no, genera uno y lo guarda junto a la
+ * base de datos para que los tokens sigan valiendo tras reiniciar.
+ */
+function loadSecret() {
+  const fromEnv = process.env.JWT_SECRET;
+  if (fromEnv) {
+    if (fromEnv.length < 32) throw new Error('JWT_SECRET debe tener al menos 32 caracteres');
+    return fromEnv;
+  }
+  const file = path.join(DATA_DIR, 'jwt-secret');
+  try {
+    const saved = fs.readFileSync(file, 'utf8').trim();
+    if (saved.length >= 32) return saved;
+  } catch {
+    // no existe todavía
+  }
+  const secret = crypto.randomBytes(48).toString('base64url');
+  fs.writeFileSync(file, secret, { mode: 0o600 });
+  console.warn(`[auth] JWT_SECRET no está definido; se generó uno en ${file}. En producción define JWT_SECRET.`);
+  return secret;
+}
 
 function parseCookies(header = '') {
   const out = {};
@@ -39,28 +67,50 @@ function parseCookies(header = '') {
   return out;
 }
 
-/** Devuelve { id, username } a partir de la cabecera Cookie, o null. */
-function userFromCookieHeader(header) {
-  const token = parseCookies(header)[SESSION_COOKIE];
-  if (!token) return null;
-  return stmts.sessionUser.get(hashToken(token), Date.now()) ?? null;
+function signToken(user) {
+  // `ca` (fecha de creación de la cuenta) ata el token a esta cuenta concreta:
+  // si la base se reinicia y otro usuario recibe el mismo id, el token deja de valer.
+  return jwt.sign({ name: user.username, ca: user.created_at }, JWT_SECRET, {
+    algorithm: 'HS256',
+    subject: String(user.id),
+    issuer: ISSUER,
+    expiresIn: TOKEN_TTL_S,
+  });
 }
 
-function startSession(res, userId) {
-  const token = crypto.randomBytes(32).toString('base64url');
-  stmts.insertSession.run(hashToken(token), userId, Date.now() + SESSION_TTL_MS);
-  res.cookie(SESSION_COOKIE, token, {
+/** Devuelve { id, username, iat } si el token es válido y la cuenta existe, o null. */
+function verifyToken(token) {
+  if (!token) return null;
+  let claims;
+  try {
+    claims = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'], issuer: ISSUER });
+  } catch {
+    return null;
+  }
+  const user = stmts.userById.get(Number(claims.sub));
+  if (!user || user.created_at !== claims.ca) return null;
+  return { id: user.id, username: user.username, iat: claims.iat };
+}
+
+/** Devuelve { id, username } a partir de la cabecera Cookie, o null. */
+function userFromCookieHeader(header) {
+  const user = verifyToken(parseCookies(header)[TOKEN_COOKIE]);
+  return user && { id: user.id, username: user.username };
+}
+
+function setTokenCookie(res, user) {
+  res.cookie(TOKEN_COOKIE, signToken(user), {
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.COOKIE_SECURE === '1',
-    maxAge: SESSION_TTL_MS,
+    maxAge: TOKEN_TTL_S * 1000,
     path: '/',
   });
 }
 
 /** Al iniciar sesión se entrega el bono (solo la primera vez por cuenta). */
 function loginResponse(res, user) {
-  startSession(res, user.id);
+  setTokenCookie(res, user);
   const bonusGranted = wallet.grantWelcomeBonus(user.id);
   res.json({
     user: { id: user.id, username: user.username, credits: wallet.getBalance(user.id) },
@@ -109,14 +159,15 @@ router.post(
     if (stmts.userByName.get(username)) return res.status(409).json({ error: 'Ese usuario ya existe.' });
 
     const hash = await bcrypt.hash(password, 10);
+    const createdAt = Date.now();
     let id;
     try {
-      id = Number(stmts.insertUser.run(username, hash, Date.now()).lastInsertRowid);
+      id = Number(stmts.insertUser.run(username, hash, createdAt).lastInsertRowid);
     } catch (err) {
       if (String(err.message).includes('UNIQUE')) return res.status(409).json({ error: 'Ese usuario ya existe.' });
       throw err;
     }
-    loginResponse(res, { id, username });
+    loginResponse(res, { id, username, created_at: createdAt });
   }
 );
 
@@ -134,19 +185,19 @@ router.post(
 );
 
 router.post('/logout', (req, res) => {
-  const token = parseCookies(req.headers.cookie)[SESSION_COOKIE];
-  if (token) stmts.deleteSession.run(hashToken(token));
-  res.clearCookie(SESSION_COOKIE, { path: '/' });
+  res.clearCookie(TOKEN_COOKIE, { path: '/' });
   res.json({ ok: true });
 });
 
 router.get('/me', (req, res) => {
-  const user = userFromCookieHeader(req.headers.cookie);
-  if (!user) return res.status(401).json({ error: 'No has iniciado sesión.' });
+  const user = verifyToken(parseCookies(req.headers.cookie)[TOKEN_COOKIE]);
+  if (!user) {
+    res.clearCookie(TOKEN_COOKIE, { path: '/' });
+    return res.status(401).json({ error: 'No has iniciado sesión.' });
+  }
+  // Mientras el jugador siga entrando, la sesión no caduca.
+  if (Date.now() / 1000 - user.iat > TOKEN_REFRESH_AFTER_S) setTokenCookie(res, stmts.userById.get(user.id));
   res.json({ user: { id: user.id, username: user.username, credits: wallet.getBalance(user.id) } });
 });
-
-stmts.purgeSessions.run(Date.now());
-setInterval(() => stmts.purgeSessions.run(Date.now()), 60 * 60 * 1000).unref();
 
 module.exports = { router, userFromCookieHeader };

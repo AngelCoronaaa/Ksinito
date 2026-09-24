@@ -7,7 +7,9 @@ const { DatabaseSync } = require('node:sqlite');
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
-const db = new DatabaseSync(path.join(DATA_DIR, 'casino.db'));
+const DB_FILE = path.join(DATA_DIR, 'casino.db');
+const db = new DatabaseSync(DB_FILE);
+console.log(`[db] Base de datos en ${DB_FILE}`);
 
 db.exec(`
   PRAGMA journal_mode = WAL;
@@ -22,11 +24,8 @@ db.exec(`
     created_at            INTEGER NOT NULL
   );
 
-  CREATE TABLE IF NOT EXISTS sessions (
-    token_hash TEXT    PRIMARY KEY,
-    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    expires_at INTEGER NOT NULL
-  );
+  -- Las sesiones ahora son JWT (ver auth.js); esta tabla ya no se usa.
+  DROP TABLE IF EXISTS sessions;
 
   -- Registro de cada movimiento de créditos (auditoría).
   CREATE TABLE IF NOT EXISTS ledger (
@@ -60,4 +59,4 @@ function transaction(fn) {
   }
 }
 
-module.exports = { db, transaction };
+module.exports = { db, transaction, DATA_DIR };

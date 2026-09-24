@@ -1,124 +1,190 @@
 <!doctype html>
-<html lang="es">
+<html lang="es" data-bs-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#06100c">
   <title>Ksinito</title>
+  <link rel="stylesheet" href="/vendor/bootstrap/css/bootstrap.min.css">
+  <link rel="stylesheet" href="/vendor/bootstrap-icons/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="/vendor/fonts/inter/index.css">
+  <link rel="stylesheet" href="/vendor/fonts/cinzel/700.css">
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
   <!-- Acceso -->
   <section id="auth-view" class="auth hidden">
+    <div class="auth-bg" aria-hidden="true">
+      <span class="float-item">♠</span><span class="float-item">♥</span><span class="float-item">♦</span>
+      <span class="float-item">♣</span><span class="float-item float-chip"></span><span class="float-item">♠</span>
+      <span class="float-item">♥</span><span class="float-item float-chip"></span><span class="float-item">♣</span>
+      <span class="float-item">♦</span><span class="float-item float-chip"></span><span class="float-item">♠</span>
+    </div>
+
     <div class="auth-card">
-      <h1 class="logo">Ksinito</h1>
-      <p class="tagline">Ruleta y Blackjack · 100 créditos de bienvenida por cuenta</p>
-      <div class="auth-tabs">
-        <button type="button" data-mode="login" class="active">Entrar</button>
-        <button type="button" data-mode="register">Crear cuenta</button>
+      <div class="text-center mb-4">
+        <div class="brand-mark mb-3"><i class="bi bi-suit-spade-fill"></i></div>
+        <h1 class="logo logo-shine">Ksinito</h1>
+        <p class="tagline">Ruleta y Blackjack en vivo · <span class="text-gold">100 créditos</span> de bienvenida</p>
       </div>
+
+      <div class="auth-tabs nav nav-pills nav-fill mb-4">
+        <button type="button" data-mode="login" class="nav-link active">Entrar</button>
+        <button type="button" data-mode="register" class="nav-link">Crear cuenta</button>
+      </div>
+
       <form id="auth-form" novalidate>
-        <label>Usuario
-          <input name="username" autocomplete="username" maxlength="20" required>
-        </label>
-        <label>Contraseña
-          <input name="password" type="password" autocomplete="current-password" maxlength="100" required>
-        </label>
+        <div class="form-floating mb-3">
+          <input class="form-control" id="auth-username" name="username" placeholder="Usuario"
+                 autocomplete="username" maxlength="20" required>
+          <label for="auth-username"><i class="bi bi-person me-1"></i>Usuario</label>
+        </div>
+        <div class="form-floating mb-2 position-relative">
+          <input class="form-control pe-5" id="auth-password" name="password" type="password" placeholder="Contraseña"
+                 autocomplete="current-password" maxlength="100" required>
+          <label for="auth-password"><i class="bi bi-lock me-1"></i>Contraseña</label>
+          <button type="button" id="toggle-password" class="password-toggle" aria-label="Mostrar contraseña">
+            <i class="bi bi-eye"></i>
+          </button>
+        </div>
         <p id="auth-error" class="error" role="alert"></p>
-        <button type="submit" id="auth-submit" class="btn primary block">Entrar</button>
+        <button type="submit" id="auth-submit" class="btn btn-gold btn-lg w-100">
+          <span id="auth-spinner" class="spinner-border spinner-border-sm me-2 hidden" aria-hidden="true"></span>
+          <span id="auth-submit-label">Entrar</span>
+        </button>
       </form>
+      <p class="auth-foot"><i class="bi bi-shield-lock me-1"></i>Créditos ficticios · Solo entretenimiento</p>
     </div>
   </section>
 
   <!-- Casino -->
   <section id="app-view" class="hidden">
-    <header class="topbar">
-      <div class="logo small">Ksinito</div>
-      <nav class="tabs">
-        <button type="button" data-tab="roulette" class="active">Ruleta</button>
-        <button type="button" data-tab="blackjack">Blackjack</button>
-      </nav>
-      <div class="user-box">
-        <span id="username" class="username"></span>
-        <span class="credits"><span id="credits">0</span> créditos</span>
-        <button type="button" id="logout" class="btn ghost small">Salir</button>
+    <header class="topbar sticky-top">
+      <div class="container-xl">
+        <div class="logo logo-sm">Ksinito</div>
+        <nav class="tabs nav nav-pills">
+          <button type="button" data-tab="roulette" class="nav-link active"><i class="bi bi-bullseye"></i><span>Ruleta</span></button>
+          <button type="button" data-tab="blackjack" class="nav-link"><i class="bi bi-suit-club-fill"></i><span>Blackjack</span></button>
+        </nav>
+        <div class="user-box">
+          <div class="credits" title="Tus créditos">
+            <i class="bi bi-coin"></i><span id="credits">0</span>
+            <span id="credits-delta" class="credits-delta"></span>
+          </div>
+          <div class="user-chip">
+            <span id="avatar" class="avatar" aria-hidden="true"></span>
+            <span id="username" class="username"></span>
+          </div>
+          <button type="button" id="logout" class="btn btn-glass btn-icon" aria-label="Salir" title="Salir">
+            <i class="bi bi-box-arrow-right"></i>
+          </button>
+        </div>
       </div>
     </header>
 
-    <main>
+    <main class="container-xl">
       <!-- Ruleta -->
       <section id="roulette" class="game">
-        <div class="roulette-layout">
-          <div class="wheel-panel">
-            <div class="wheel-wrap">
-              <canvas id="wheel"></canvas>
-              <div class="wheel-pointer"></div>
+        <div class="row g-4">
+          <div class="col-lg-5 col-xl-4">
+            <div class="glass-panel wheel-panel">
+              <div class="wheel-wrap">
+                <canvas id="wheel"></canvas>
+                <div id="rl-result" class="wheel-result" aria-hidden="true"></div>
+              </div>
+              <div class="phase-box">
+                <div class="d-flex justify-content-between align-items-baseline gap-2">
+                  <span id="rl-phase" class="phase-label">Conectando…</span>
+                  <span id="rl-timer" class="timer"></span>
+                </div>
+                <div class="progress phase-progress" role="progressbar" aria-label="Tiempo de la ronda">
+                  <div id="rl-progress" class="progress-bar"></div>
+                </div>
+              </div>
+              <div id="rl-outcome" class="outcome" aria-live="polite"></div>
             </div>
-            <div class="round-status">
-              <span id="rl-phase">Conectando…</span>
-              <span id="rl-timer" class="timer"></span>
-            </div>
-            <div id="rl-outcome" class="outcome"></div>
           </div>
 
-          <div class="board-panel">
-            <div class="panel">
-              <h3>Últimos 30 giros</h3>
-              <div id="rl-history" class="history-strip"></div>
+          <div class="col-lg-7 col-xl-8">
+            <div class="d-grid gap-3">
+              <div class="glass-panel">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                  <h3 class="panel-title"><i class="bi bi-clock-history me-1"></i>Últimos 30 giros</h3>
+                  <div id="rl-stats" class="rl-stats"></div>
+                </div>
+                <div id="rl-history" class="history-strip"></div>
+              </div>
+
+              <div class="board-scroll">
+                <div id="rl-board" class="board"></div>
+              </div>
+
+              <div class="glass-panel bet-controls">
+                <div id="rl-chips" class="chips"></div>
+                <div class="bet-summary">Apostado <strong id="rl-total">0</strong></div>
+                <button type="button" id="rl-clear" class="btn btn-glass">
+                  <i class="bi bi-arrow-counterclockwise me-1"></i>Quitar apuestas
+                </button>
+              </div>
             </div>
-            <div class="board-scroll">
-              <div id="rl-board" class="board"></div>
-            </div>
-            <div class="bet-controls">
-              <div id="rl-chips" class="chips"></div>
-              <div class="bet-summary">Apostado: <strong id="rl-total">0</strong></div>
-              <button type="button" id="rl-clear" class="btn ghost">Quitar apuestas</button>
-            </div>
-            <p class="rules">Ruleta europea · Pleno 35:1 · Docena/Columna 2:1 · Rojo/Negro, Par/Impar, 1-18/19-36 1:1 · Elige ficha y pulsa en la mesa.</p>
           </div>
         </div>
+        <p class="rules">Ruleta europea · Pleno 35:1 · Docena/Columna 2:1 · Rojo/Negro, Par/Impar, 1-18/19-36 1:1 · Elige ficha y pulsa en la mesa.</p>
       </section>
 
       <!-- Blackjack -->
       <section id="blackjack" class="game hidden">
         <div class="bj-table">
+          <div class="bj-arc" aria-hidden="true"></div>
           <div id="bj-shoe" class="bj-shoe" aria-hidden="true">
-            <div class="card back"></div><div class="card back"></div><div class="card back"></div>
+            <div class="pcard back"></div><div class="pcard back"></div><div class="pcard back"></div>
           </div>
           <div class="bj-dealer">
-            <div class="label">Crupier <span id="bj-dealer-total" class="total"></span></div>
-            <div id="bj-dealer-cards"></div>
+            <div class="label"><i class="bi bi-person-badge"></i> Crupier <span id="bj-dealer-total" class="total"></span></div>
+            <div id="bj-dealer-cards" class="dealer-cards"></div>
+          </div>
+          <div class="felt-print" aria-hidden="true">
+            <span class="fp-main">Blackjack paga 3 a 2</span>
+            <span class="fp-sub">El crupier se planta en 17</span>
           </div>
           <div class="bj-status">
-            <span id="bj-phase"></span>
-            <span id="bj-timer" class="timer"></span>
+            <div class="status-pill"><span id="bj-phase"></span><span id="bj-timer" class="timer"></span></div>
+            <div class="progress phase-progress" role="progressbar" aria-label="Tiempo restante">
+              <div id="bj-progress" class="progress-bar"></div>
+            </div>
           </div>
           <div id="bj-seats" class="bj-seats"></div>
         </div>
 
-        <div class="bj-controls">
+        <div class="glass-panel bj-controls">
           <p id="bj-hint" class="hint"></p>
           <div id="bj-bet" class="bj-bet hidden">
             <div id="bj-chips" class="chips"></div>
-            <div class="bet-summary">Apuesta: <strong id="bj-pending">0</strong></div>
-            <button type="button" id="bj-bet-clear" class="btn ghost">Borrar</button>
-            <button type="button" id="bj-bet-place" class="btn primary">Apostar</button>
+            <div class="bet-summary">Apuesta <strong id="bj-pending">0</strong></div>
+            <button type="button" id="bj-bet-clear" class="btn btn-glass"><i class="bi bi-x-lg me-1"></i>Borrar</button>
+            <button type="button" id="bj-bet-place" class="btn btn-gold px-4"><i class="bi bi-check2-circle me-1"></i>Apostar</button>
           </div>
           <div id="bj-actions" class="bj-actions hidden">
-            <button type="button" class="btn primary" data-action="hit">Pedir</button>
-            <button type="button" class="btn primary" data-action="stand">Plantarse</button>
-            <button type="button" class="btn" data-action="double">Doblar</button>
-            <button type="button" class="btn" data-action="split">Dividir</button>
+            <button type="button" class="btn btn-gold" data-action="hit"><i class="bi bi-plus-lg me-1"></i>Pedir</button>
+            <button type="button" class="btn btn-gold" data-action="stand"><i class="bi bi-hand-index-thumb me-1"></i>Plantarse</button>
+            <button type="button" class="btn btn-outline-gold" data-action="double"><i class="bi bi-chevron-double-up me-1"></i>Doblar</button>
+            <button type="button" class="btn btn-outline-gold" data-action="split"><i class="bi bi-layout-split me-1"></i>Dividir</button>
           </div>
-          <button type="button" id="bj-leave" class="btn ghost hidden">Levantarse</button>
+          <button type="button" id="bj-leave" class="btn btn-glass btn-sm hidden"><i class="bi bi-box-arrow-left me-1"></i>Levantarse</button>
         </div>
         <p class="rules">Mesa de 6 jugadores · 6 barajas · El crupier se planta en 17 · Blackjack paga 3:2 · Doblar con 2 cartas · Dividir una vez</p>
       </section>
     </main>
 
-    <div id="toast" class="toast" role="status"></div>
+    <div id="toasts" class="toast-container position-fixed bottom-0 start-50 translate-middle-x p-3"></div>
+    <div id="celebrate" class="celebrate" aria-live="polite"></div>
+    <canvas id="confetti-canvas" class="confetti-canvas" aria-hidden="true"></canvas>
   </section>
 
   <script src="/socket.io/socket.io.js"></script>
+  <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script src="/vendor/confetti/confetti.browser.js"></script>
   <script src="/js/roulette.js"></script>
   <script src="/js/blackjack.js"></script>
   <script src="/js/app.js"></script>

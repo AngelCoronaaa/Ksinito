@@ -55,6 +55,7 @@ class RouletteGame {
     return {
       phase: this.phase,
       endsIn: Math.max(0, this.endsAt - Date.now()),
+      duration: this.duration,
       result: this.phase === 'betting' ? null : this.result,
       history: this.history,
       players: this.bets.size,
@@ -76,6 +77,7 @@ class RouletteGame {
 
   schedule(ms, fn) {
     this.endsAt = Date.now() + ms;
+    this.duration = ms;
     setTimeout(fn, ms);
   }
 

@@ -17,8 +17,28 @@ Variables de entorno opcionales:
 |-----------------|----------------------------------------------------------------------|
 | `PORT`          | Puerto HTTP (por defecto `3000`)                                     |
 | `DATA_DIR`      | Carpeta de la base de datos (por defecto `./data`)                   |
+| `JWT_SECRET`    | Secreto para firmar los tokens de sesión (mínimo 32 caracteres). Si no se define, se genera uno y se guarda en `DATA_DIR/jwt-secret` |
 | `COOKIE_SECURE` | Pon `1` en producción con HTTPS para marcar la cookie como `Secure`  |
 | `TRUST_PROXY`   | Pon `1` si está detrás de un proxy (nginx, etc.) para leer la IP real |
+
+## Sesiones (JWT)
+
+- Al registrarte o entrar, el servidor firma un **JWT** (HS256, 7 días) y lo guarda en la
+  cookie httpOnly `ksjwt`. Los sockets se autentican con la misma cookie.
+- Los tokens no se guardan en la base de datos, así que siguen valiendo tras reiniciar o
+  redesplegar siempre que `JWT_SECRET` no cambie. `/api/me` renueva el token si tiene más de un día.
+- El token incluye la fecha de creación de la cuenta: si la base se borra y otra persona
+  recibe el mismo id, el token viejo deja de valer.
+
+## Despliegue: que no se pierdan las cuentas
+
+Las cuentas y los créditos viven en `DATA_DIR/casino.db`. Si la plataforma borra el disco en
+cada despliegue (Render, Railway, Fly… sin volumen), **se pierden todos los usuarios**, con JWT
+o sin él. Para evitarlo:
+
+1. Crea un disco/volumen persistente en la plataforma y móntalo, por ejemplo, en `/var/data`.
+2. Define `DATA_DIR=/var/data` y un `JWT_SECRET` fijo (p. ej. `openssl rand -base64 48`).
+3. Al arrancar, el log muestra `[db] Base de datos en …`: comprueba que apunta al volumen.
 
 ## Créditos
 
@@ -55,10 +75,12 @@ Variables de entorno opcionales:
 ```
 src/
   server.js     Express + Socket.IO, autenticación de sockets
-  auth.js       Registro, login, sesiones (cookie httpOnly)
+  auth.js       Registro, login y sesiones JWT (cookie httpOnly)
   wallet.js     Único módulo que modifica créditos
   db.js         Esquema SQLite
   roulette.js   Lógica de la ruleta
   blackjack.js  Lógica de la mesa de blackjack
-public/         Cliente (HTML, CSS y JS sin frameworks)
+public/         Cliente: Bootstrap 5 + Bootstrap Icons, JS sin frameworks y sin build.
+                Bootstrap, iconos, fuentes (Inter, Cinzel) y canvas-confetti se sirven
+                desde node_modules en /vendor (mismo origen, sin CDN).
 ```

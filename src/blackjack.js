@@ -77,6 +77,7 @@ class BlackjackTable {
     this.phase = 'waiting';
     this.turn = null;
     this.endsAt = null;
+    this.duration = null;
     this.timer = null;
   }
 
@@ -85,6 +86,7 @@ class BlackjackTable {
   schedule(ms, fn) {
     clearTimeout(this.timer);
     this.endsAt = Date.now() + ms;
+    this.duration = ms;
     this.timer = setTimeout(fn, ms);
   }
 
@@ -92,6 +94,7 @@ class BlackjackTable {
     clearTimeout(this.timer);
     this.timer = null;
     this.endsAt = null;
+    this.duration = null;
   }
 
   draw() {
@@ -116,6 +119,7 @@ class BlackjackTable {
     return {
       phase: this.phase,
       endsIn: this.endsAt ? Math.max(0, this.endsAt - Date.now()) : null,
+      duration: this.duration,
       turn: this.turn,
       limits: { min: MIN_BET, max: MAX_BET },
       dealer: { cards: dealerCards, total: visible.length ? handTotal(visible).total : null },

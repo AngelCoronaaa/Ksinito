@@ -30,6 +30,16 @@ app.use((req, res, next) => {
 });
 app.use(express.json({ limit: '10kb' }));
 app.use('/api', auth.router);
+
+// Librerías del cliente servidas desde node_modules (mismo origen, sin CDN).
+const vendor = (pkg, dir = '') =>
+  express.static(path.join(path.dirname(require.resolve(`${pkg}/package.json`)), dir), { maxAge: '7d' });
+app.use('/vendor/bootstrap', vendor('bootstrap', 'dist'));
+app.use('/vendor/bootstrap-icons', vendor('bootstrap-icons', 'font'));
+app.use('/vendor/confetti', vendor('canvas-confetti', 'dist'));
+app.use('/vendor/fonts/inter', vendor('@fontsource-variable/inter'));
+app.use('/vendor/fonts/cinzel', vendor('@fontsource/cinzel'));
+
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 const server = http.createServer(app);
