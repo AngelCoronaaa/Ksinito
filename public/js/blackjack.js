@@ -187,8 +187,11 @@ window.BlackjackUI = (() => {
 
     const plate = document.createElement('div');
     plate.className = 'seat-plate';
-    plate.append(span('avatar', seat.username.slice(0, 1)), span('seat-name', seat.username));
-    if (i === mine) plate.append(span('you-badge', 'tú'));
+    const nameRow = document.createElement('div');
+    nameRow.className = 'seat-name-row';
+    nameRow.append(span('seat-name', seat.username));
+    if (i === mine) nameRow.append(span('you-badge', 'tú'));
+    plate.append(ctx.avatar(seat.username, seat.avatar), nameRow);
     el.append(plate);
 
     if (seat.hands.length === 0) {
@@ -314,15 +317,20 @@ window.BlackjackUI = (() => {
     runAnimations();
   }
 
-  /** Celebra si la mano que acaba de terminar dejó ganancias. */
+  /** Anuncia la victoria si alguna de tus manos ganó en la ronda que acaba de terminar. */
   function onSettled() {
     const seat = state.seats[mySeatIndex()];
-    if (!seat || !seat.hands.length) return;
+    if (!seat || !seat.hands.some((h) => h.result === 'win' || h.result === 'blackjack')) return;
     const bet = seat.hands.reduce((sum, h) => sum + h.bet, 0);
     const payout = seat.hands.reduce((sum, h) => sum + h.payout, 0);
-    if (payout <= bet) return;
     const blackjack = seat.hands.some((h) => h.result === 'blackjack');
-    setTimeout(() => ctx.celebrate(payout, blackjack ? '¡Blackjack!' : '¡Ganas!', blackjack), 600);
+    // Espera a que se vean las cartas y los resultados.
+    setTimeout(() => ctx.celebrate({
+      amount: payout,
+      net: payout - bet,
+      detail: blackjack ? 'Blackjack natural · paga 3:2' : seat.hands.length > 1 ? 'Blackjack · manos divididas' : 'Blackjack · mano ganadora',
+      big: blackjack,
+    }), 600);
   }
 
   function renderPending() {

@@ -12,6 +12,8 @@
   let credits = null;
   let shownCredits = null;
   let creditsTween = 0;
+  let me = null;
+  const AVATAR_SIZE = 256;
 
   const fireConfetti = window.confetti
     ? window.confetti.create($('#confetti-canvas'), { resize: true, useWorker: false, disableForReducedMotion: true })
@@ -38,36 +40,193 @@
     window.bootstrap.Toast.getOrCreateInstance(el, { delay: 3200 }).show();
   }
 
-  /** Muestra una ganancia grande en pantalla con confeti. */
-  function celebrate(amount, label = '¡Ganas!', big = false) {
+  const span = (cls, text) => {
+    const el = document.createElement('span');
+    el.className = cls;
+    el.textContent = text;
+    return el;
+  };
+  const fmt = (n) => n.toLocaleString('es');
+
+  // ---------- animación de victoria ----------
+
+  const WIN_MS = 3300;
+  const winQueue = [];
+  let winShowing = false;
+
+  /**
+   * Anuncia una ganancia en el centro de la pantalla. Si ya hay una en curso,
+   * espera su turno para que no se tapen (p. ej. ganar en ruleta y blackjack a la vez).
+   * `amount` es lo que cobras; `net` (opcional) lo que ganas descontando lo apostado.
+   */
+  function celebrate({ amount, net = null, title = null, detail = '', big = false }) {
+    // Si cobraste algo pero en total perdiste (p. ej. aciertas rojo y fallas un pleno), no es "ganaste".
+    title ??= net !== null && net <= 0 ? '¡Acertaste!' : '¡Ganaste!';
+    winQueue.push({ amount, net, title, detail, big });
+    if (!winShowing) nextWin();
+  }
+
+  function countUp(el, value) {
+    if (reducedMotion.matches) {
+      el.textContent = `+${fmt(value)}`;
+      return;
+    }
+    const t0 = performance.now();
+    const step = (now) => {
+      const p = Math.min(1, (now - t0) / 1000);
+      el.textContent = `+${fmt(Math.round(value * (1 - (1 - p) ** 3)))}`;
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  function nextWin() {
     const el = $('#celebrate');
-    const box = document.createElement('div');
-    const title = document.createElement('span');
-    title.className = 'c-label';
-    title.textContent = label;
-    const value = document.createElement('span');
-    value.className = 'c-amount';
-    value.textContent = `+${amount.toLocaleString('es')}`;
-    box.append(title, value);
-    el.replaceChildren(box);
+    const win = winQueue.shift();
+    if (!win) {
+      winShowing = false;
+      el.classList.remove('show');
+      return;
+    }
+    winShowing = true;
+
+    const card = document.createElement('div');
+    card.className = 'win-card';
+    const amount = span('c-amount', '+0');
+    card.append(span('c-label', win.title), amount);
+    const details = [win.detail];
+    if (win.net !== null && win.net !== win.amount) details.push(`Neto ${win.net >= 0 ? '+' : '−'}${fmt(Math.abs(win.net))}`);
+    const detailText = details.filter(Boolean).join(' · ');
+    if (detailText) card.append(span('c-detail', detailText));
+    const rays = document.createElement('div');
+    rays.className = 'win-rays';
+    el.replaceChildren(rays, card);
+    el.classList.toggle('big', win.big);
     el.classList.remove('show');
     void el.offsetWidth; // reinicia la animación
     el.classList.add('show');
+    countUp(amount, win.amount);
 
-    if (!fireConfetti || reducedMotion.matches) return;
-    const count = big ? 170 : 90;
-    fireConfetti({ particleCount: count, spread: 70, angle: 60, origin: { x: 0.1, y: 0.75 }, colors: CONFETTI_COLORS });
-    fireConfetti({ particleCount: count, spread: 70, angle: 120, origin: { x: 0.9, y: 0.75 }, colors: CONFETTI_COLORS });
-    if (big) {
-      setTimeout(() => fireConfetti({ particleCount: 120, spread: 120, startVelocity: 45, origin: { y: 0.45 }, colors: CONFETTI_COLORS }), 250);
+    if (fireConfetti && !reducedMotion.matches && (win.net ?? win.amount) > 0) {
+      const count = win.big ? 170 : 90;
+      fireConfetti({ particleCount: count, spread: 70, angle: 60, origin: { x: 0.1, y: 0.75 }, colors: CONFETTI_COLORS });
+      fireConfetti({ particleCount: count, spread: 70, angle: 120, origin: { x: 0.9, y: 0.75 }, colors: CONFETTI_COLORS });
+      if (win.big) {
+        setTimeout(() => fireConfetti({ particleCount: 120, spread: 120, startVelocity: 45, origin: { y: 0.45 }, colors: CONFETTI_COLORS }), 250);
+      }
+    }
+    setTimeout(nextWin, WIN_MS);
+  }
+
+  // ---------- fotos de perfil ----------
+
+  const hueOf = (name) => {
+    let h = 0;
+    for (const ch of name.toLowerCase()) h = (h * 31 + ch.codePointAt(0)) % 360;
+    return h;
+  };
+
+  /** Foto de perfil, o la inicial sobre un color propio de cada jugador. */
+  function avatarEl(name, url, extra = '') {
+    const cls = extra ? `avatar ${extra}` : 'avatar';
+    if (url) {
+      const img = document.createElement('img');
+      img.className = cls;
+      img.src = url;
+      img.alt = '';
+      img.decoding = 'async';
+      return img;
+    }
+    const el = span(cls, name.slice(0, 1));
+    el.style.setProperty('--hue', hueOf(name));
+    return el;
+  }
+
+  function setMyAvatar(url) {
+    me.avatar = url;
+    for (const [id, extra] of [['avatar', ''], ['profile-avatar', 'avatar-xl']]) {
+      const el = avatarEl(me.username, url, extra);
+      el.id = id;
+      el.setAttribute('aria-hidden', 'true');
+      $(`#${id}`).replaceWith(el);
+    }
+    $('#avatar-remove').disabled = !url;
+  }
+
+  /** Recorta la imagen en cuadrado y la reduce a 256×256 antes de subirla. */
+  async function prepareAvatar(file) {
+    if (!file.type.startsWith('image/')) throw new Error('Elige un archivo de imagen.');
+    if (file.size > 20 * 1024 * 1024) throw new Error('La imagen pesa demasiado (máx. 20 MB).');
+    let bitmap;
+    try {
+      bitmap = await createImageBitmap(file);
+    } catch {
+      throw new Error('No se pudo leer la imagen. Prueba con una JPG o PNG.');
+    }
+    const side = Math.min(bitmap.width, bitmap.height);
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = AVATAR_SIZE;
+    const g = canvas.getContext('2d');
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, AVATAR_SIZE, AVATAR_SIZE);
+    bitmap.close();
+    const toBlob = (type, quality) => new Promise((resolve) => canvas.toBlob(resolve, type, quality));
+    // Safari no codifica WebP y devuelve PNG: en ese caso se usa JPEG.
+    const webp = await toBlob('image/webp', 0.86);
+    return webp?.type === 'image/webp' ? webp : toBlob('image/jpeg', 0.88);
+  }
+
+  async function uploadAvatar(file) {
+    showError($('#profile-error'), '');
+    $('#avatar-busy').classList.remove('hidden');
+    try {
+      const data = await api('/api/avatar', await prepareAvatar(file), 'PUT');
+      setMyAvatar(data.avatar);
+      toast('Foto de perfil actualizada', 'success');
+    } catch (err) {
+      showError($('#profile-error'), err.message);
+    } finally {
+      $('#avatar-busy').classList.add('hidden');
+      $('#avatar-input').value = '';
     }
   }
 
-  async function api(path, body) {
+  $('#avatar-input').addEventListener('change', (e) => {
+    const [file] = e.target.files;
+    if (file) uploadAvatar(file);
+  });
+
+  $('#avatar-remove').addEventListener('click', async () => {
+    showError($('#profile-error'), '');
+    try {
+      await api('/api/avatar', null, 'DELETE');
+      setMyAvatar(null);
+    } catch (err) {
+      showError($('#profile-error'), err.message);
+    }
+  });
+
+  const drop = $('#profile-drop');
+  drop.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    drop.classList.add('dragging');
+  });
+  drop.addEventListener('dragleave', () => drop.classList.remove('dragging'));
+  drop.addEventListener('drop', (e) => {
+    e.preventDefault();
+    drop.classList.remove('dragging');
+    const [file] = e.dataTransfer.files;
+    if (file) uploadAvatar(file);
+  });
+
+  $('#profile-modal').addEventListener('hidden.bs.modal', () => showError($('#profile-error'), ''));
+
+  async function api(path, body = null, method = body ? 'POST' : 'GET') {
+    const isFile = body instanceof Blob;
     const res = await fetch(path, {
-      method: body ? 'POST' : 'GET',
-      headers: body ? { 'Content-Type': 'application/json' } : {},
-      body: body ? JSON.stringify(body) : undefined,
+      method,
+      headers: body ? { 'Content-Type': isFile ? body.type : 'application/json' } : {},
+      body: body ? (isFile ? body : JSON.stringify(body)) : undefined,
       credentials: 'same-origin',
     });
     const data = await res.json().catch(() => ({}));
@@ -148,8 +307,7 @@
     $('#auth-username').focus();
   }
 
-  function showError(message) {
-    const el = $('#auth-error');
+  function showError(el, message) {
     el.textContent = message;
     el.classList.remove('shake');
     void el.offsetWidth;
@@ -162,7 +320,7 @@
       document.querySelectorAll('.auth-tabs button').forEach((b) => b.classList.toggle('active', b === btn));
       $('#auth-submit-label').textContent = authMode === 'login' ? 'Entrar' : 'Crear cuenta y recibir 100 créditos';
       $('#auth-password').autocomplete = authMode === 'login' ? 'current-password' : 'new-password';
-      showError('');
+      showError($('#auth-error'), '');
     });
   });
 
@@ -180,7 +338,7 @@
     const submit = $('#auth-submit');
     submit.disabled = true;
     $('#auth-spinner').classList.remove('hidden');
-    showError('');
+    showError($('#auth-error'), '');
     try {
       const data = await api(`/api/${authMode}`, {
         username: form.username.value.trim(),
@@ -190,10 +348,10 @@
       startApp(data.user);
       if (data.bonusGranted) {
         toast('¡Bienvenido! Recibiste 100 créditos de regalo.', 'success');
-        celebrate(100, 'Bono de bienvenida', true);
+        celebrate({ amount: 100, title: 'Bono de bienvenida', detail: 'Tus primeros créditos', big: true });
       }
     } catch (err) {
-      showError(err.message);
+      showError($('#auth-error'), err.message);
     } finally {
       submit.disabled = false;
       $('#auth-spinner').classList.add('hidden');
@@ -229,18 +387,21 @@
   function startApp(user) {
     $('#auth-view').classList.add('hidden');
     $('#app-view').classList.remove('hidden');
+    me = user;
     $('#username').textContent = user.username;
-    $('#avatar').textContent = user.username.slice(0, 1);
+    $('#profile-name').textContent = user.username;
+    setMyAvatar(user.avatar);
     setCredits(user.credits);
 
     socket = io();
     socket.on('balance', ({ credits: value }) => setCredits(value));
+    socket.on('profile', ({ avatar }) => setMyAvatar(avatar));
     socket.on('connect_error', (err) => {
       if (err.message === 'unauthorized') location.reload();
     });
     socket.on('disconnect', () => toast('Conexión perdida, reconectando…', 'error'));
 
-    const ctx = { socket, emit, toast, celebrate, renderChips, reducedMotion, user };
+    const ctx = { socket, emit, toast, celebrate, renderChips, avatar: avatarEl, reducedMotion, user };
     window.RouletteUI.init(ctx);
     window.BlackjackUI.init(ctx);
   }

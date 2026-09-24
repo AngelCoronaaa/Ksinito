@@ -534,7 +534,7 @@ window.RouletteUI = (() => {
     if (won > 0) {
       el.classList.add('win');
       el.textContent = `¡Salió el ${number}! Cobras ${won} créditos (neto ${net >= 0 ? '+' : ''}${net})`;
-      if (net > 0) ctx.celebrate(won, `¡${number}! Ganas`, net >= staked * 5);
+      ctx.celebrate({ amount: won, net, detail: `Ruleta · Salió el ${number}`, big: net >= staked * 5 });
     } else {
       el.classList.add('lose');
       el.textContent = `Salió el ${number}. Pierdes ${staked} créditos`;

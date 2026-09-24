@@ -38,6 +38,14 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS ledger_user ON ledger(user_id, id);
 
+  -- Fotos de perfil (ver avatars.js). Viven en la misma base que las cuentas.
+  CREATE TABLE IF NOT EXISTS avatars (
+    user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    mime       TEXT    NOT NULL,
+    data       BLOB    NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+
   -- Solo se conservan los últimos 30 giros (ver roulette.js).
   CREATE TABLE IF NOT EXISTS roulette_spins (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,

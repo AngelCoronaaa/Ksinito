@@ -9,6 +9,7 @@
 
 const crypto = require('node:crypto');
 const wallet = require('./wallet');
+const { avatarUrl } = require('./avatars');
 const { GameError, assertInt } = require('./errors');
 
 const MAX_SEATS = 6;
@@ -128,6 +129,7 @@ class BlackjackTable {
           s && {
             userId: s.userId,
             username: s.username,
+            avatar: avatarUrl(s.userId),
             bet: s.bet,
             leaving: s.leaving,
             activeHand: s.activeHand,

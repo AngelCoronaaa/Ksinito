@@ -40,6 +40,15 @@ o sin él. Para evitarlo:
 2. Define `DATA_DIR=/var/data` y un `JWT_SECRET` fijo (p. ej. `openssl rand -base64 48`).
 3. Al arrancar, el log muestra `[db] Base de datos en …`: comprueba que apunta al volumen.
 
+## Perfil
+
+- Pulsa tu nombre arriba a la derecha para subir (o arrastrar) una foto de perfil. El navegador
+  la recorta en cuadrado y la reduce a 256×256 antes de subirla.
+- El servidor solo acepta JPEG, PNG o WebP (lo comprueba por el contenido, no por la extensión),
+  de hasta 300 KB y 1024×1024 px. Las fotos se guardan en la tabla `avatars` de la misma base de
+  datos, así que se conservan igual que las cuentas (ver "Despliegue").
+- Los demás jugadores ven tu foto, tu nombre y tu apuesta en la mesa de blackjack.
+
 ## Créditos
 
 - Cada cuenta recibe **100 créditos una sola vez**, al iniciar sesión por primera vez.
@@ -76,6 +85,8 @@ o sin él. Para evitarlo:
 src/
   server.js     Express + Socket.IO, autenticación de sockets
   auth.js       Registro, login y sesiones JWT (cookie httpOnly)
+  avatars.js    Fotos de perfil: validación y almacenamiento
+  profile.js    Rutas para subir, quitar y servir la foto
   wallet.js     Único módulo que modifica créditos
   db.js         Esquema SQLite
   roulette.js   Lógica de la ruleta

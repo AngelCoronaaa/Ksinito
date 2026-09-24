@@ -13,6 +13,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { db, DATA_DIR } = require('./db');
 const wallet = require('./wallet');
+const avatars = require('./avatars');
 
 const TOKEN_COOKIE = 'ksjwt';
 const TOKEN_TTL_S = 7 * 24 * 60 * 60;
@@ -108,12 +109,16 @@ function setTokenCookie(res, user) {
   });
 }
 
+function publicUser(user) {
+  return { id: user.id, username: user.username, credits: wallet.getBalance(user.id), avatar: avatars.avatarUrl(user.id) };
+}
+
 /** Al iniciar sesión se entrega el bono (solo la primera vez por cuenta). */
 function loginResponse(res, user) {
   setTokenCookie(res, user);
   const bonusGranted = wallet.grantWelcomeBonus(user.id);
   res.json({
-    user: { id: user.id, username: user.username, credits: wallet.getBalance(user.id) },
+    user: publicUser(user),
     bonusGranted,
   });
 }
@@ -197,7 +202,7 @@ router.get('/me', (req, res) => {
   }
   // Mientras el jugador siga entrando, la sesión no caduca.
   if (Date.now() / 1000 - user.iat > TOKEN_REFRESH_AFTER_S) setTokenCookie(res, stmts.userById.get(user.id));
-  res.json({ user: { id: user.id, username: user.username, credits: wallet.getBalance(user.id) } });
+  res.json({ user: publicUser(user) });
 });
 
-module.exports = { router, userFromCookieHeader };
+module.exports = { router, userFromCookieHeader, rateLimit };

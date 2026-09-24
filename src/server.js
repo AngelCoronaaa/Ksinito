@@ -5,6 +5,8 @@ const path = require('node:path');
 const express = require('express');
 const { Server } = require('socket.io');
 const auth = require('./auth');
+const profile = require('./profile');
+const avatars = require('./avatars');
 const wallet = require('./wallet');
 const { GameError } = require('./errors');
 const { RouletteGame } = require('./roulette');
@@ -30,6 +32,7 @@ app.use((req, res, next) => {
 });
 app.use(express.json({ limit: '10kb' }));
 app.use('/api', auth.router);
+app.use('/api', profile.router);
 
 // Librerías del cliente servidas desde node_modules (mismo origen, sin CDN).
 const vendor = (pkg, dir = '') =>
@@ -62,6 +65,12 @@ const blackjack = new BlackjackTable(io);
 
 // Cada cambio de saldo se envía a todas las pestañas abiertas del usuario.
 wallet.events.on('balance', (userId, credits) => io.to(`user:${userId}`).emit('balance', { credits }));
+
+// Al cambiar la foto se avisa a sus pestañas y, si está sentado, a toda la mesa.
+avatars.events.on('change', (userId, avatar) => {
+  io.to(`user:${userId}`).emit('profile', { avatar });
+  if (blackjack.seatIndexOf(userId) !== -1) blackjack.broadcast();
+});
 
 io.use((socket, next) => {
   const user = auth.userFromCookieHeader(socket.handshake.headers.cookie);

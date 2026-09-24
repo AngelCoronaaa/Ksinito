@@ -72,10 +72,10 @@
             <i class="bi bi-coin"></i><span id="credits">0</span>
             <span id="credits-delta" class="credits-delta"></span>
           </div>
-          <div class="user-chip">
+          <button type="button" class="user-chip" data-bs-toggle="modal" data-bs-target="#profile-modal" title="Tu perfil">
             <span id="avatar" class="avatar" aria-hidden="true"></span>
             <span id="username" class="username"></span>
-          </div>
+          </button>
           <button type="button" id="logout" class="btn btn-glass btn-icon" aria-label="Salir" title="Salir">
             <i class="bi bi-box-arrow-right"></i>
           </button>
@@ -176,6 +176,32 @@
         <p class="rules">Mesa de 6 jugadores · 6 barajas · El crupier se planta en 17 · Blackjack paga 3:2 · Doblar con 2 cartas · Dividir una vez</p>
       </section>
     </main>
+
+    <div class="modal fade" id="profile-modal" tabindex="-1" aria-labelledby="profile-title" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content profile-modal">
+          <div class="modal-header border-0 pb-0">
+            <h2 class="modal-title panel-title" id="profile-title">Tu perfil</h2>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          </div>
+          <div id="profile-drop" class="modal-body text-center">
+            <div class="profile-avatar-wrap">
+              <span id="profile-avatar" class="avatar avatar-xl" aria-hidden="true"></span>
+              <label for="avatar-input" class="avatar-edit" title="Cambiar foto"><i class="bi bi-camera-fill"></i></label>
+              <div id="avatar-busy" class="avatar-busy hidden"><span class="spinner-border" aria-label="Subiendo"></span></div>
+            </div>
+            <div id="profile-name" class="profile-name"></div>
+            <p class="profile-hint">Sube una foto o arrástrala aquí. La recortamos en cuadrado y la verán los demás jugadores en la mesa.</p>
+            <input type="file" id="avatar-input" accept="image/*" class="visually-hidden">
+            <div class="d-flex gap-2 justify-content-center flex-wrap">
+              <label for="avatar-input" class="btn btn-gold"><i class="bi bi-upload me-1"></i>Subir foto</label>
+              <button type="button" id="avatar-remove" class="btn btn-glass"><i class="bi bi-trash3 me-1"></i>Quitar foto</button>
+            </div>
+            <p id="profile-error" class="error mb-0 mt-3" role="alert"></p>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <div id="toasts" class="toast-container position-fixed bottom-0 start-50 translate-middle-x p-3"></div>
     <div id="celebrate" class="celebrate" aria-live="polite"></div>
