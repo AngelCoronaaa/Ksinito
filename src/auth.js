@@ -10,6 +10,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { query, one, withPublicId } = require('./db');
+const { SerialQueue } = require('./queue');
 const wallet = require('./wallet');
 const avatars = require('./avatars');
 
@@ -20,7 +21,36 @@ const ISSUER = 'ksinito';
 const USERNAME_RE = /^[A-Za-z0-9_]{3,20}$/;
 const DUMMY_HASH = bcrypt.hashSync('dummy-password', 10);
 
+// ---------- límite de cuentas por dispositivo e IP ----------
+// Un valor 0 desactiva ese límite.
+function intEnv(name, fallback) {
+  const value = Number(process.env[name]);
+  return process.env[name] !== undefined && Number.isInteger(value) && value >= 0 ? value : fallback;
+}
+const DEVICE_COOKIE = 'ksdev';
+const DEVICE_TTL_MS = 5 * 365 * 24 * 60 * 60 * 1000;
+const ACCOUNTS_PER_DEVICE = intEnv('ACCOUNTS_PER_DEVICE', 2); // para siempre
+const ACCOUNTS_PER_IP = intEnv('ACCOUNTS_PER_IP', 3); // en la ventana de abajo
+const ACCOUNTS_IP_WINDOW_HOURS = intEnv('ACCOUNTS_IP_WINDOW_HOURS', 24); // 0 = para siempre
+// Detrás de Cloudflare, req.ip es la IP del proxy; la del jugador viene en esta cabecera.
+// Déjala vacía (CLIENT_IP_HEADER=) si la app no está detrás de Cloudflare: si no, se podría falsear.
+const CLIENT_IP_HEADER = (process.env.CLIENT_IP_HEADER ?? 'cf-connecting-ip').trim().toLowerCase();
+
+// Las altas se comprueban de una en una: dos a la vez desde el mismo dispositivo no se saltan el límite.
+const registrations = new SerialQueue('registro');
+
+class LimitError extends Error {}
+
 let JWT_SECRET = null;
+
+/** IP real del visitante (ver CLIENT_IP_HEADER). */
+function clientIp(req) {
+  const header = CLIENT_IP_HEADER ? req.headers[CLIENT_IP_HEADER] : null;
+  return (typeof header === 'string' && header.trim()) || req.ip || '';
+}
+
+/** HMAC con el secreto de la app: permite contar sin guardar la IP ni el dispositivo en claro. */
+const fingerprint = (kind, value) => crypto.createHmac('sha256', JWT_SECRET).update(`${kind}:${value}`).digest('hex');
 
 const SQL = {
   userByName: 'SELECT id, public_id, username, password_hash, created_at FROM users WHERE username = ?',
@@ -121,8 +151,8 @@ async function loginResponse(res, user) {
   });
 }
 
-/** Limita peticiones por IP, o por lo que devuelva `key` (p. ej. el usuario). */
-function rateLimit({ windowMs, max, message, key = (req) => req.ip }) {
+/** Limita peticiones por IP real, o por lo que devuelva `key` (p. ej. el usuario). */
+function rateLimit({ windowMs, max, message, key = clientIp }) {
   const hits = new Map();
   setInterval(() => {
     const now = Date.now();
@@ -140,6 +170,41 @@ function rateLimit({ windowMs, max, message, key = (req) => req.ip }) {
     if (++entry.count > max) return res.status(429).json({ error: message });
     next();
   };
+}
+
+/** Identificador permanente de este navegador (cookie httpOnly). Se crea si no existe. */
+function deviceId(req, res) {
+  let id = parseCookies(req.headers.cookie)[DEVICE_COOKIE];
+  if (!/^[A-Za-z0-9_-]{43}$/.test(id ?? '')) {
+    id = crypto.randomBytes(32).toString('base64url');
+    res.cookie(DEVICE_COOKIE, id, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.COOKIE_SECURE === '1',
+      maxAge: DEVICE_TTL_MS,
+      path: '/',
+    });
+  }
+  return id;
+}
+
+/** Mensaje de error si este dispositivo o esta IP ya crearon demasiadas cuentas, o null. */
+async function accountLimitError(deviceHash, ipHash) {
+  if (ACCOUNTS_PER_DEVICE > 0) {
+    const { n } = await one('SELECT COUNT(*) AS n FROM registrations WHERE device_hash = ?', [deviceHash]);
+    if (Number(n) >= ACCOUNTS_PER_DEVICE) {
+      return `Desde este dispositivo ya se crearon ${ACCOUNTS_PER_DEVICE} cuentas, el máximo permitido. Entra con una de ellas.`;
+    }
+  }
+  if (ACCOUNTS_PER_IP > 0) {
+    const since = ACCOUNTS_IP_WINDOW_HOURS ? Date.now() - ACCOUNTS_IP_WINDOW_HOURS * 3_600_000 : 0;
+    const { n } = await one('SELECT COUNT(*) AS n FROM registrations WHERE ip_hash = ? AND created_at >= ?', [ipHash, since]);
+    if (Number(n) >= ACCOUNTS_PER_IP) {
+      const when = ACCOUNTS_IP_WINDOW_HOURS ? ` en las últimas ${ACCOUNTS_IP_WINDOW_HOURS} horas` : '';
+      return `Desde tu red ya se crearon ${ACCOUNTS_PER_IP} cuentas${when}. Inténtalo más tarde o entra con tu cuenta.`;
+    }
+  }
+  return null;
 }
 
 function readCredentials(body) {
@@ -162,17 +227,28 @@ router.post(
     }
     if (await one(SQL.userByName, [username])) return res.status(409).json({ error: 'Ese usuario ya existe.' });
 
+    const deviceHash = fingerprint('device', deviceId(req, res));
+    const ipHash = fingerprint('ip', clientIp(req));
     const hash = await bcrypt.hash(password, 10);
     const createdAt = Date.now();
     let user;
     try {
-      user = await withPublicId(async (publicId) => ({
-        id: Number((await query(SQL.insertUser, [username, hash, publicId, createdAt])).insertId),
-        public_id: publicId,
-        username,
-        created_at: createdAt,
-      }));
+      user = await registrations.run(async () => {
+        const limit = await accountLimitError(deviceHash, ipHash);
+        if (limit) throw new LimitError(limit);
+        const created = await withPublicId(async (publicId) => ({
+          id: Number((await query(SQL.insertUser, [username, hash, publicId, createdAt])).insertId),
+          public_id: publicId,
+          username,
+          created_at: createdAt,
+        }));
+        await query('INSERT INTO registrations (user_id, device_hash, ip_hash, created_at) VALUES (?, ?, ?, ?)', [
+          created.id, deviceHash, ipHash, createdAt,
+        ]);
+        return created;
+      });
     } catch (err) {
+      if (err instanceof LimitError) return res.status(429).json({ error: err.message });
       // Dos registros simultáneos con el mismo nombre: el índice único rechaza el segundo.
       if (err.code === 'ER_DUP_ENTRY' && String(err.message).includes('username')) {
         return res.status(409).json({ error: 'Ese usuario ya existe.' });
@@ -192,6 +268,7 @@ router.post(
     // Se compara siempre para no revelar por tiempo si el usuario existe.
     const ok = await bcrypt.compare(password, user?.password_hash ?? DUMMY_HASH);
     if (!user || !ok) return res.status(401).json({ error: 'Usuario o contraseña incorrectos.' });
+    deviceId(req, res);
     await loginResponse(res, user);
   }
 );
@@ -212,4 +289,4 @@ router.get('/me', async (req, res) => {
   res.json({ user: await publicUser(user) });
 });
 
-module.exports = { init, router, userFromCookieHeader, rateLimit };
+module.exports = { init, router, userFromCookieHeader, rateLimit, clientIp };

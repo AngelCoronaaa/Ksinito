@@ -425,11 +425,11 @@
       credits: () => credits,
       chat: window.ChatUI,
       transfer: window.TransferUI,
-      camera: window.CameraUI,
+      media: window.MediaUI,
     };
     window.ChatUI.init(ctx);
     window.TransferUI.init(ctx);
-    window.CameraUI.init(ctx);
+    window.MediaUI.init(ctx);
     window.RouletteUI.init(ctx);
     window.BlackjackUI.init(ctx);
   }

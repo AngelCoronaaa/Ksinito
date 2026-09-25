@@ -29,6 +29,10 @@ npm run dev            # http://localhost:3000 (npm start en producción)
 | `JWT_SECRET`         | Secreto de las sesiones (32+ caracteres). Si no se define, se genera uno y se guarda en la tabla `settings` |
 | `PORT`               | Puerto HTTP (por defecto `3000`)                                                  |
 | `COOKIE_SECURE`      | `1` en producción con HTTPS para marcar la cookie como `Secure`                    |
+| `ACCOUNTS_PER_DEVICE` | Cuentas que se pueden crear desde un mismo navegador (por defecto `2`; `0` = sin límite) |
+| `ACCOUNTS_PER_IP`    | Cuentas nuevas por IP en la ventana de abajo (por defecto `3`; `0` = sin límite)   |
+| `ACCOUNTS_IP_WINDOW_HOURS` | Ventana del límite por IP, en horas (por defecto `24`; `0` = para siempre)  |
+| `CLIENT_IP_HEADER`   | Cabecera con la IP real del jugador (por defecto `cf-connecting-ip`, de Cloudflare). Vacía si no usas Cloudflare, porque se podría falsear |
 | `RTC_ICE_SERVERS`    | Servidores STUN/TURN para las cámaras, en JSON (por defecto el STUN público de Google). Ver "Cámaras" |
 | `TRUST_PROXY`        | Si está detrás de un proxy (nginx, Traefik…) para leer la IP real                 |
 
@@ -106,14 +110,29 @@ Al arrancar, la app espera hasta ~1 minuto a que MySQL responda. `GET /api/healt
   el zapato; la carta tapada del crupier se gira al descubrirse. Cada jugador tiene 20 s por turno (si no, se planta solo).
 - Si cierras la pestaña, conservas el asiento 20 s por si recargas.
 
-## Cámaras en la mesa de blackjack
+## Límite de cuentas
 
-- Al sentarte, la web pregunta si quieres activar la cámara ("Ahora no" la deja apagada).
-  Luego puedes encenderla o apagarla con el botón junto a *Levantarse*; al levantarte se apaga.
-- Tu vídeo sustituye a tu foto en tu silla y lo ven todos los que miran esa mesa. Solo vídeo,
-  sin sonido, a 320×240 y 15 fps (~250 kbps por espectador).
-- El vídeo va directo de navegador a navegador (WebRTC); el servidor solo pone en contacto a
-  los jugadores y no ve ni guarda el vídeo. Cada cámara envía una copia a cada espectador
+- Solo limita **crear** cuentas; entrar con una existente funciona siempre.
+- **Por dispositivo:** una cookie permanente (`ksdev`, 5 años) identifica el navegador. Borrar
+  cookies o usar incógnito la esquiva, y para eso está el límite por IP.
+- **Por IP:** usa la IP real que manda Cloudflare. Tiene ventana de tiempo para no bloquear
+  para siempre redes compartidas (universidades, datos móviles con IP compartida).
+- En la tabla `registrations` se guardan HMAC del dispositivo y de la IP, nunca los valores en claro.
+- En desarrollo, pon `ACCOUNTS_PER_DEVICE=0` y `ACCOUNTS_PER_IP=0` para poder crear cuentas de prueba.
+
+## Cámaras y chat de voz en la mesa de blackjack
+
+- Al sentarte, la web pregunta si quieres activar la cámara, con la opción de activar también
+  el micrófono ("Ahora no" deja todo apagado). Luego hay botones para cámara y micrófono junto a
+  *Levantarse*; al levantarte se apagan.
+- Tu vídeo sustituye a tu foto en tu silla (320×240, 15 fps, ~250 kbps por espectador). Tu voz
+  la oyen todos los que miran la mesa; un aro verde marca quién está hablando y aparece un
+  micrófono junto al nombre de quien lo tiene abierto.
+- Solo pueden hablar y mostrarse los que están sentados; los espectadores ven y oyen. Cualquiera
+  puede pulsar *Silenciar mesa*. Si el navegador bloquea el sonido automático (Safari), aparece
+  *Activar sonido de la mesa*.
+- Vídeo y voz van directo de navegador a navegador (WebRTC); el servidor solo pone en contacto
+  a los jugadores y no ve, oye ni guarda nada. Cada jugador envía una copia a cada espectador
   (máximo 20).
 - Necesita HTTPS (o `localhost`). Con el STUN por defecto conecta en la mayoría de redes; en
   datos móviles o redes corporativas puede fallar sin un servidor **TURN** (por ejemplo coturn

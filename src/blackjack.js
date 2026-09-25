@@ -147,9 +147,9 @@ class BlackjackTable {
             userId: s.userId,
             username: s.username,
             avatar: avatarUrl(s.userId),
-            // Socket que emite la cámara: los espectadores le piden el vídeo por WebRTC.
-            camera: s.cameraSocket !== null,
-            cameraPeer: s.cameraSocket,
+            // Cámara y/o micrófono: `peer` es el socket que emite (los espectadores le piden
+            // el vídeo/audio por WebRTC) y `rev` cambia cada vez que enciende o apaga algo.
+            media: s.media && { peer: s.media.socket, video: s.media.video, audio: s.media.audio, rev: s.media.rev },
             bet: s.bet,
             leaving: s.leaving,
             activeHand: s.activeHand,
@@ -202,7 +202,7 @@ class BlackjackTable {
       hands: [],
       activeHand: 0,
       leaving: false,
-      cameraSocket: null,
+      media: null, // { socket, video, audio, rev }
     };
     this.broadcast();
   }
@@ -229,29 +229,35 @@ class BlackjackTable {
     this.broadcast();
   }
 
-  /** Enciende (socketId) o apaga (null) la cámara del jugador sentado. */
-  setCamera(userId, socketId) {
+  /** Cámara y micrófono del jugador sentado, emitidos desde `socketId` (ambos apagados = nada). */
+  setMedia(userId, socketId, { video, audio }) {
     return this.queue.run(() => {
       const seat = this.seats[this.requireSeat(userId)];
-      if (seat.cameraSocket === socketId) return;
-      seat.cameraSocket = socketId;
+      const prev = seat.media;
+      if (!video && !audio) {
+        if (!prev) return;
+        seat.media = null;
+      } else {
+        if (prev && prev.socket === socketId && prev.video === video && prev.audio === audio) return;
+        seat.media = { socket: socketId, video, audio, rev: (prev?.rev ?? 0) + 1 };
+      }
       this.broadcast();
     });
   }
 
-  /** Apaga la cámara que emitía ese socket (al desconectarse). */
-  clearCamera(socketId) {
+  /** Apaga lo que emitía ese socket (al desconectarse). */
+  clearMedia(socketId) {
     return this.queue.run(() => {
-      const seat = this.seats.find((s) => s && s.cameraSocket === socketId);
+      const seat = this.seats.find((s) => s && s.media?.socket === socketId);
       if (!seat) return;
-      seat.cameraSocket = null;
+      seat.media = null;
       this.broadcast();
     });
   }
 
-  /** Sockets que están emitiendo cámara en esta mesa. */
-  cameraSockets() {
-    return this.seats.filter((s) => s && s.cameraSocket).map((s) => s.cameraSocket);
+  /** Sockets que están emitiendo cámara o micrófono en esta mesa. */
+  mediaSockets() {
+    return this.seats.filter((s) => s && s.media).map((s) => s.media.socket);
   }
 
   placeBet(user, amount) {

@@ -24,7 +24,7 @@ const EVENTS_PER_SECOND = 15;
 const BLACKJACK_TABLES = 5;
 const RTC_SIGNALS_PER_SECOND = 60; // candidatos ICE de varias cámaras a la vez
 
-// Servidores STUN/TURN para las cámaras (WebRTC). Con solo STUN, algunas redes (datos
+// Servidores STUN/TURN para cámaras y chat de voz (WebRTC). Con solo STUN, algunas redes (datos
 // móviles, redes corporativas) no conectan; para ellas hace falta un TURN en RTC_ICE_SERVERS.
 const ICE_SERVERS = (() => {
   try {
@@ -44,8 +44,8 @@ app.use((req, res, next) => {
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
     'Referrer-Policy': 'same-origin',
-    // La cámara solo la pide esta web (mesa de blackjack); micrófono y ubicación no se usan.
-    'Permissions-Policy': 'camera=(self), microphone=(), geolocation=()',
+    // Cámara y micrófono solo para esta web (mesa de blackjack); la ubicación no se usa.
+    'Permissions-Policy': 'camera=(self), microphone=(self), geolocation=()',
     'Content-Security-Policy':
       "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'",
   });
@@ -61,9 +61,22 @@ app.use('/api', auth.router);
 app.use('/api', profile.router);
 app.use('/api', transfers.router);
 
+// CSS/JS con ?v=<versión> (ver ASSETS_VERSION abajo) se cachean un año: la URL cambia en
+// cada deploy. Sin versión: el código propio se revalida siempre y las librerías (fuentes e
+// iconos que piden sus CSS) se guardan 7 días.
+app.use(['/css', '/js', '/vendor'], (req, res, next) => {
+  const cache = req.query.v
+    ? 'public, max-age=31536000, immutable'
+    : req.baseUrl === '/vendor'
+      ? 'public, max-age=604800'
+      : 'no-cache';
+  res.set('Cache-Control', cache);
+  next();
+});
+
 // Librerías del cliente servidas desde node_modules (mismo origen, sin CDN).
 const vendor = (pkg, dir = '') =>
-  express.static(path.join(path.dirname(require.resolve(`${pkg}/package.json`)), dir), { maxAge: '7d' });
+  express.static(path.join(path.dirname(require.resolve(`${pkg}/package.json`)), dir), { cacheControl: false });
 app.use('/vendor/bootstrap', vendor('bootstrap', 'dist'));
 app.use('/vendor/bootstrap-icons', vendor('bootstrap-icons', 'font'));
 app.use('/vendor/confetti', vendor('canvas-confetti', 'dist'));
@@ -87,7 +100,7 @@ app.get(['/', '/index.html'], (req, res) => {
   res.type('html').send(indexHtml);
 });
 
-app.use(express.static(PUBLIC_DIR));
+app.use(express.static(PUBLIC_DIR, { cacheControl: false }));
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -148,8 +161,8 @@ function requireTable(userId) {
  */
 function rtcTableFor(a, b) {
   for (const table of tables.values()) {
-    const cams = table.cameraSockets();
-    if ((cams.includes(a.id) && b.rooms.has(table.room)) || (cams.includes(b.id) && a.rooms.has(table.room))) return table;
+    const pubs = table.mediaSockets();
+    if ((pubs.includes(a.id) && b.rooms.has(table.room)) || (pubs.includes(b.id) && a.rooms.has(table.room))) return table;
   }
   return null;
 }
@@ -175,10 +188,10 @@ function cleanSignal(msg) {
   return out;
 }
 
-/** Avisa a quienes emiten cámara de que este socket ya no mira (cierran su conexión con él). */
+/** Avisa a quienes emiten cámara/micrófono de que este socket ya no mira (cierran su conexión con él). */
 function rtcGone(socketId) {
   for (const table of tables.values()) {
-    for (const cam of table.cameraSockets()) if (cam !== socketId) io.to(cam).emit('rtc:gone', { peer: socketId });
+    for (const pub of table.mediaSockets()) if (pub !== socketId) io.to(pub).emit('rtc:gone', { peer: socketId });
   }
 }
 
@@ -284,8 +297,8 @@ io.on('connection', (socket) => {
     })
   );
   on('bj:leave', () => tableOf(user.id)?.leave(user.id));
-  // Cámara del jugador sentado (la emite este socket; solo vídeo, sin audio).
-  on('bj:camera', (p) => requireTable(user.id).setCamera(user.id, p.on === true ? socket.id : null));
+  // Cámara y micrófono del jugador sentado (los emite este socket).
+  on('bj:media', (p) => requireTable(user.id).setMedia(user.id, socket.id, { video: p.video === true, audio: p.audio === true }));
 
   // Señalización WebRTC: se reenvía sin pasar por on() para no gastar su límite ni responder.
   let rtcTokens = RTC_SIGNALS_PER_SECOND;
@@ -313,9 +326,9 @@ io.on('connection', (socket) => {
   on('bj:action', (p) => requireTable(user.id).act(user, p.action));
 
   socket.on('disconnect', () => {
-    // Su cámara (si la emitía) se apaga ya; el asiento se conserva unos segundos.
+    // Su cámara y micrófono (si los emitía) se apagan ya; el asiento se conserva unos segundos.
     for (const table of tables.values()) {
-      table.clearCamera(socket.id).catch((err) => console.error('[blackjack] Al apagar la cámara', err));
+      table.clearMedia(socket.id).catch((err) => console.error('[blackjack] Al apagar cámara/micrófono', err));
     }
     rtcGone(socket.id);
     const remaining = (connections.get(user.id) ?? 1) - 1;

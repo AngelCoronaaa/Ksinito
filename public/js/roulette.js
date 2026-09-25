@@ -35,6 +35,7 @@ window.RouletteUI = (() => {
   let g;
   let size = 0;
   let layers = null; // { bowl, disc }: partes fijas y giratorias pintadas una sola vez
+  let glow = null; // { idx, base, pulse }: brillo de la casilla ganadora, pintado una vez por resultado
   let wheelAngle = 0;
   let lastFrame = 0;
   let spin = null;
@@ -244,6 +245,7 @@ window.RouletteUI = (() => {
     g.setTransform(px / css, 0, 0, px / css, 0, 0);
     size = css;
     layers = { bowl: makeLayer(paintBowl), disc: makeLayer(paintDisc) };
+    glow = null;
   }
 
   const pocketAngle = (wheel, idx) => wheel + idx * SEG - Math.PI / 2;
@@ -312,6 +314,39 @@ window.RouletteUI = (() => {
     g.fill();
   }
 
+  /**
+   * Brillo de la casilla ganadora en dos capas precalculadas: `shadowBlur` en cada
+   * fotograma es muy lento en algunos navegadores (Safari, Firefox). En cada fotograma
+   * solo se mezcla la capa del pulso con más o menos opacidad.
+   */
+  function glowFor(idx) {
+    if (glow?.idx === idx) return glow;
+    const mid = idx * SEG - Math.PI / 2;
+    const dpr = window.devicePixelRatio || 1;
+    const base = makeLayer((lg, G) => {
+      annulus(lg, G.c, G.ring, G.pocketIn, mid - SEG / 2, mid + SEG / 2);
+      lg.strokeStyle = '#f7dc8f';
+      lg.lineWidth = 2.5;
+      lg.shadowColor = 'rgba(247,220,143,.95)';
+      lg.shadowBlur = 6;
+      lg.stroke();
+    });
+    // Solo la sombra (el trazo se dibuja fuera del lienzo y la sombra se desplaza de vuelta).
+    const pulse = makeLayer((lg, G) => {
+      const off = 4 * size;
+      lg.translate(-off, 0);
+      annulus(lg, G.c, G.ring, G.pocketIn, mid - SEG / 2, mid + SEG / 2);
+      lg.strokeStyle = '#f7dc8f';
+      lg.lineWidth = 2.5;
+      lg.shadowColor = 'rgba(247,220,143,.95)';
+      lg.shadowBlur = 18;
+      lg.shadowOffsetX = off * dpr;
+      lg.stroke();
+    });
+    glow = { idx, base, pulse };
+    return glow;
+  }
+
   function draw(G, ball, now) {
     const { c } = G;
     g.clearRect(0, 0, size, size);
@@ -321,14 +356,11 @@ window.RouletteUI = (() => {
     g.rotate(wheelAngle);
     g.drawImage(layers.disc, -c, -c, size, size);
     if (state?.phase === 'result' && !spin && ballIdx !== null) {
-      const mid = ballIdx * SEG - Math.PI / 2;
-      annulus(g, 0, G.ring, G.pocketIn, mid - SEG / 2, mid + SEG / 2);
-      g.strokeStyle = '#f7dc8f';
-      g.lineWidth = 2.5;
-      g.shadowColor = 'rgba(247,220,143,.95)';
-      g.shadowBlur = 12 + 6 * Math.sin(now / 180);
-      g.stroke();
-      g.shadowBlur = 0;
+      const { base, pulse } = glowFor(ballIdx);
+      g.drawImage(base, -c, -c, size, size);
+      g.globalAlpha = (1 + Math.sin(now / 180)) / 2;
+      g.drawImage(pulse, -c, -c, size, size);
+      g.globalAlpha = 1;
     }
     g.restore();
     if (ball) drawBall(G, ball);

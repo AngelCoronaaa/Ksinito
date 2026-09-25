@@ -36,6 +36,18 @@ CREATE TABLE IF NOT EXISTS ledger (
   KEY ledger_user (user_id, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Altas de cuentas, para limitar cuántas se crean por dispositivo y por IP.
+-- El dispositivo (cookie permanente) y la IP se guardan como HMAC, nunca en claro.
+CREATE TABLE IF NOT EXISTS registrations (
+  user_id     BIGINT UNSIGNED NOT NULL,
+  device_hash CHAR(64)        NOT NULL,
+  ip_hash     CHAR(64)        NOT NULL,
+  created_at  BIGINT          NOT NULL,
+  PRIMARY KEY (user_id),
+  KEY registrations_device (device_hash),
+  KEY registrations_ip (ip_hash, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Envíos de créditos entre jugadores.
 CREATE TABLE IF NOT EXISTS transfers (
   id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,

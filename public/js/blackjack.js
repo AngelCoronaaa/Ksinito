@@ -21,6 +21,9 @@ window.BlackjackUI = (() => {
   // Contenedores de cartas persistentes (por mano), para animar solo lo nuevo
   // aunque el resto del asiento se vuelva a pintar.
   let cardWraps = new Map(); // key -> { el, cards }
+  // Cada silla se reconstruye solo si cambió algo de lo que muestra: rehacer las 15 en cada
+  // carta repartida era lo que más trababa la mesa (y pausaba los vídeos al moverlos).
+  let seatCache = []; // índice -> { key, el }
   let animQueue = [];
   // Lo que ya se animó una vez, para no repetirlo en cada actualización.
   const shownResults = new Set();
@@ -188,12 +191,13 @@ window.BlackjackUI = (() => {
       btn.addEventListener('click', async () => {
         const res = await ctx.emit('bj:sit', { table: currentTable, seat: i });
         if (!res.ok) return ctx.toast(res.error, 'error');
-        ctx.camera.promptOnSit();
+        ctx.media.promptOnSit();
       });
       el.append(span('seat-spot', String(i + 1)), btn);
       return el;
     }
 
+    el.dataset.user = seat.userId; // para marcar quién está hablando
     if (i === mine) el.classList.add('mine');
     if (state.turn === i) el.classList.add('turn');
 
@@ -203,8 +207,14 @@ window.BlackjackUI = (() => {
     nameRow.className = 'seat-name-row';
     nameRow.append(span('seat-name', seat.username));
     if (i === mine) nameRow.append(span('you-badge', 'tú'));
+    if (seat.media?.audio) {
+      const mic = document.createElement('i');
+      mic.className = 'bi bi-mic-fill seat-mic';
+      mic.title = 'Micrófono activado';
+      nameRow.append(mic);
+    }
     // Si tiene la cámara encendida, su vídeo ocupa el lugar de la foto.
-    plate.append(ctx.camera.mount(seat, i === mine) ?? ctx.avatar(seat.username, seat.avatar), nameRow);
+    plate.append(ctx.media.mount(seat, i === mine) ?? ctx.avatar(seat.username, seat.avatar), nameRow);
     el.append(plate);
 
     if (seat.hands.length === 0) {
@@ -303,8 +313,22 @@ window.BlackjackUI = (() => {
     dealerTotal.className = `total${total > 21 ? ' bust' : total === 21 ? ' twentyone' : ''}`;
     if (changed) animQueue.push({ type: 'reveal', node: dealerTotal });
 
-    // Asientos
-    $('#bj-seats').replaceChildren(...state.seats.map((s, i) => seatEl(s, i, mine)));
+    // Asientos: solo se rehacen los que cambiaron, y se sustituyen en su sitio.
+    const container = $('#bj-seats');
+    const elsewhereId = myTable()?.id ?? null;
+    state.seats.forEach((s, i) => {
+      // Clave con todo lo que muestra la silla; una vacía solo depende de si puedes sentarte.
+      const key = s
+        ? JSON.stringify([s, i === mine, state.turn === i, state.phase, i === mine ? [ctx.media.isVideoOn(), ctx.media.isAudioOn()] : 0])
+        : JSON.stringify([mine === -1, elsewhereId]);
+      if (seatCache[i]?.key !== key) seatCache[i] = { key, el: seatEl(s, i, mine) };
+      const current = container.children[i];
+      if (current !== seatCache[i].el) {
+        if (current) current.replaceWith(seatCache[i].el);
+        else container.append(seatCache[i].el);
+      }
+    });
+    while (container.children.length > state.seats.length) container.lastElementChild.remove();
     $('#bj-phase').textContent = statusText(mine);
 
     // Controles
@@ -313,7 +337,7 @@ window.BlackjackUI = (() => {
     $('#bj-bet').classList.toggle('hidden', !canBet);
     $('#bj-actions').classList.toggle('hidden', !myTurn);
     $('#bj-leave').classList.toggle('hidden', !seat || seat.leaving);
-    renderCameraButton(seat);
+    renderMediaButtons(seat);
 
     if (myTurn) {
       const hand = seat.hands[seat.activeHand];
@@ -334,18 +358,39 @@ window.BlackjackUI = (() => {
     renderPending();
 
     runAnimations();
-    ctx.camera.sync(state);
-    ctx.camera.resume();
+    ctx.media.sync(state);
+    ctx.media.resume();
   }
 
-  function renderCameraButton(seat = state?.seats[mySeatIndex()]) {
-    const btn = $('#bj-camera');
-    const on = ctx.camera.isOn();
-    btn.classList.toggle('hidden', !seat || seat.leaving);
-    btn.classList.toggle('on', on);
-    btn.innerHTML = on
+  function renderMediaButtons(seat = state?.seats[mySeatIndex()]) {
+    const seated = !!seat && !seat.leaving;
+    const cam = $('#bj-camera');
+    const camOn = ctx.media.isVideoOn();
+    cam.classList.toggle('hidden', !seated);
+    cam.classList.toggle('on', camOn);
+    cam.innerHTML = camOn
       ? '<i class="bi bi-camera-video-off me-1"></i>Apagar cámara'
       : '<i class="bi bi-camera-video me-1"></i>Activar cámara';
+
+    const mic = $('#bj-mic');
+    const micOn = ctx.media.isAudioOn();
+    mic.classList.toggle('hidden', !seated);
+    mic.classList.toggle('on', micOn);
+    mic.innerHTML = micOn
+      ? '<i class="bi bi-mic-mute me-1"></i>Silenciar micrófono'
+      : '<i class="bi bi-mic me-1"></i>Activar micrófono';
+
+    // Sonido de la mesa: solo si alguien tiene el micrófono abierto (o el navegador lo bloqueó).
+    const sound = $('#bj-sound');
+    const blocked = ctx.media.isAudioBlocked();
+    sound.classList.toggle('hidden', !blocked && !ctx.media.hasRemoteAudio());
+    sound.classList.toggle('btn-gold', blocked);
+    sound.classList.toggle('btn-glass', !blocked);
+    sound.innerHTML = blocked
+      ? '<i class="bi bi-volume-up me-1"></i>Activar sonido de la mesa'
+      : ctx.media.isDeafened()
+        ? '<i class="bi bi-volume-up me-1"></i>Activar sonido'
+        : '<i class="bi bi-volume-mute me-1"></i>Silenciar mesa';
   }
 
   /** Anuncia la victoria si alguna de tus manos ganó (llega aunque mires otra mesa). */
@@ -414,8 +459,9 @@ window.BlackjackUI = (() => {
       $('#bj-dealer-total').textContent = '';
       $('#bj-phase').textContent = 'Cargando mesa…';
       $('#bj-hint').textContent = '';
-      for (const sel of ['#bj-bet', '#bj-actions', '#bj-leave', '#bj-camera']) $(sel).classList.add('hidden');
-      ctx.camera.resetViewing();
+      for (const sel of ['#bj-bet', '#bj-actions', '#bj-leave', '#bj-camera', '#bj-mic']) $(sel).classList.add('hidden');
+      seatCache = [];
+      ctx.media.resetViewing();
       renderTables();
       // Cada mesa tiene su chat; solo se cambia si se está viendo el blackjack.
       if (!$('#blackjack').classList.contains('hidden')) {
@@ -478,14 +524,18 @@ window.BlackjackUI = (() => {
       });
     });
 
-    $('#bj-camera').addEventListener('click', () => (ctx.camera.isOn() ? ctx.camera.stop() : ctx.camera.start()));
-    document.addEventListener('camera:change', () => {
-      renderCameraButton();
-      if (state) render(); // mi recuadro de vídeo aparece o desaparece
+    $('#bj-camera').addEventListener('click', () => ctx.media.set({ video: !ctx.media.isVideoOn() }));
+    $('#bj-mic').addEventListener('click', () => ctx.media.set({ audio: !ctx.media.isAudioOn() }));
+    $('#bj-sound').addEventListener('click', () =>
+      ctx.media.setDeafened(ctx.media.isAudioBlocked() ? false : !ctx.media.isDeafened())
+    );
+    document.addEventListener('media:change', () => {
+      renderMediaButtons();
+      if (state) render(); // mi recuadro de vídeo o mi micrófono aparecen o desaparecen
     });
 
     $('#bj-leave').addEventListener('click', async () => {
-      ctx.camera.stop();
+      ctx.media.stop();
       const res = await ctx.emit('bj:leave');
       if (!res.ok) ctx.toast(res.error, 'error');
     });
@@ -502,7 +552,7 @@ window.BlackjackUI = (() => {
       // Al entrar (o recargar) se abre directamente la mesa donde estás sentado.
       const mine = myTable();
       // Si me levantaron (p. ej. por desconexión), mi cámara ya no tiene silla.
-      if (!mine && ctx.camera.isOn()) ctx.camera.stop({ notify: false });
+      if (!mine && ctx.media.isOn()) ctx.media.stop({ notify: false });
       if (!lobbyReceived && mine && mine.id !== currentTable) watch(mine.id);
       lobbyReceived = true;
       renderTables();
