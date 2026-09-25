@@ -147,6 +147,9 @@ class BlackjackTable {
             userId: s.userId,
             username: s.username,
             avatar: avatarUrl(s.userId),
+            // Socket que emite la cámara: los espectadores le piden el vídeo por WebRTC.
+            camera: s.cameraSocket !== null,
+            cameraPeer: s.cameraSocket,
             bet: s.bet,
             leaving: s.leaving,
             activeHand: s.activeHand,
@@ -192,7 +195,15 @@ class BlackjackTable {
     assertInt(seat, 0, this.seats.length - 1, 'El asiento');
     if (this.seatIndexOf(user.id) !== -1) throw new GameError('Ya estás sentado en esta mesa');
     if (this.seats[seat]) throw new GameError('Ese asiento está ocupado');
-    this.seats[seat] = { userId: user.id, username: user.username, bet: 0, hands: [], activeHand: 0, leaving: false };
+    this.seats[seat] = {
+      userId: user.id,
+      username: user.username,
+      bet: 0,
+      hands: [],
+      activeHand: 0,
+      leaving: false,
+      cameraSocket: null,
+    };
     this.broadcast();
   }
 
@@ -216,6 +227,31 @@ class BlackjackTable {
       if (this.phase === 'playing' && this.turn === i) return this.advance();
     }
     this.broadcast();
+  }
+
+  /** Enciende (socketId) o apaga (null) la cámara del jugador sentado. */
+  setCamera(userId, socketId) {
+    return this.queue.run(() => {
+      const seat = this.seats[this.requireSeat(userId)];
+      if (seat.cameraSocket === socketId) return;
+      seat.cameraSocket = socketId;
+      this.broadcast();
+    });
+  }
+
+  /** Apaga la cámara que emitía ese socket (al desconectarse). */
+  clearCamera(socketId) {
+    return this.queue.run(() => {
+      const seat = this.seats.find((s) => s && s.cameraSocket === socketId);
+      if (!seat) return;
+      seat.cameraSocket = null;
+      this.broadcast();
+    });
+  }
+
+  /** Sockets que están emitiendo cámara en esta mesa. */
+  cameraSockets() {
+    return this.seats.filter((s) => s && s.cameraSocket).map((s) => s.cameraSocket);
   }
 
   placeBet(user, amount) {

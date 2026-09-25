@@ -29,6 +29,7 @@ npm run dev            # http://localhost:3000 (npm start en producción)
 | `JWT_SECRET`         | Secreto de las sesiones (32+ caracteres). Si no se define, se genera uno y se guarda en la tabla `settings` |
 | `PORT`               | Puerto HTTP (por defecto `3000`)                                                  |
 | `COOKIE_SECURE`      | `1` en producción con HTTPS para marcar la cookie como `Secure`                    |
+| `RTC_ICE_SERVERS`    | Servidores STUN/TURN para las cámaras, en JSON (por defecto el STUN público de Google). Ver "Cámaras" |
 | `TRUST_PROXY`        | Si está detrás de un proxy (nginx, Traefik…) para leer la IP real                 |
 
 Al arrancar, la app espera hasta ~1 minuto a que MySQL responda. `GET /api/health` devuelve
@@ -105,6 +106,19 @@ Al arrancar, la app espera hasta ~1 minuto a que MySQL responda. `GET /api/healt
   el zapato; la carta tapada del crupier se gira al descubrirse. Cada jugador tiene 20 s por turno (si no, se planta solo).
 - Si cierras la pestaña, conservas el asiento 20 s por si recargas.
 
+## Cámaras en la mesa de blackjack
+
+- Al sentarte, la web pregunta si quieres activar la cámara ("Ahora no" la deja apagada).
+  Luego puedes encenderla o apagarla con el botón junto a *Levantarse*; al levantarte se apaga.
+- Tu vídeo sustituye a tu foto en tu silla y lo ven todos los que miran esa mesa. Solo vídeo,
+  sin sonido, a 320×240 y 15 fps (~250 kbps por espectador).
+- El vídeo va directo de navegador a navegador (WebRTC); el servidor solo pone en contacto a
+  los jugadores y no ve ni guarda el vídeo. Cada cámara envía una copia a cada espectador
+  (máximo 20).
+- Necesita HTTPS (o `localhost`). Con el STUN por defecto conecta en la mayoría de redes; en
+  datos móviles o redes corporativas puede fallar sin un servidor **TURN** (por ejemplo coturn
+  propio o un servicio como Metered o Twilio) configurado en `RTC_ICE_SERVERS`.
+
 ## Estructura
 
 ```
@@ -118,7 +132,8 @@ src/
   avatars.js    Fotos de perfil: validación y almacenamiento
   profile.js    Rutas para subir, quitar y servir la foto
   transfers.js  Envío de créditos entre jugadores por ID
-  chat.js       Chat de la ruleta y de cada mesa
+  chat.js       Chat de la ruleta y de cada mesa (el servidor también reenvía la
+                señalización WebRTC de las cámaras, en server.js)
   wallet.js     Único módulo que modifica créditos
   roulette.js   Lógica de la ruleta
   blackjack.js  Lógica de las mesas de blackjack

@@ -187,7 +187,8 @@ window.BlackjackUI = (() => {
       btn.disabled = mine !== -1 || (elsewhere !== null && elsewhere.id !== currentTable);
       btn.addEventListener('click', async () => {
         const res = await ctx.emit('bj:sit', { table: currentTable, seat: i });
-        if (!res.ok) ctx.toast(res.error, 'error');
+        if (!res.ok) return ctx.toast(res.error, 'error');
+        ctx.camera.promptOnSit();
       });
       el.append(span('seat-spot', String(i + 1)), btn);
       return el;
@@ -202,7 +203,8 @@ window.BlackjackUI = (() => {
     nameRow.className = 'seat-name-row';
     nameRow.append(span('seat-name', seat.username));
     if (i === mine) nameRow.append(span('you-badge', 'tú'));
-    plate.append(ctx.avatar(seat.username, seat.avatar), nameRow);
+    // Si tiene la cámara encendida, su vídeo ocupa el lugar de la foto.
+    plate.append(ctx.camera.mount(seat, i === mine) ?? ctx.avatar(seat.username, seat.avatar), nameRow);
     el.append(plate);
 
     if (seat.hands.length === 0) {
@@ -311,6 +313,7 @@ window.BlackjackUI = (() => {
     $('#bj-bet').classList.toggle('hidden', !canBet);
     $('#bj-actions').classList.toggle('hidden', !myTurn);
     $('#bj-leave').classList.toggle('hidden', !seat || seat.leaving);
+    renderCameraButton(seat);
 
     if (myTurn) {
       const hand = seat.hands[seat.activeHand];
@@ -331,6 +334,18 @@ window.BlackjackUI = (() => {
     renderPending();
 
     runAnimations();
+    ctx.camera.sync(state);
+    ctx.camera.resume();
+  }
+
+  function renderCameraButton(seat = state?.seats[mySeatIndex()]) {
+    const btn = $('#bj-camera');
+    const on = ctx.camera.isOn();
+    btn.classList.toggle('hidden', !seat || seat.leaving);
+    btn.classList.toggle('on', on);
+    btn.innerHTML = on
+      ? '<i class="bi bi-camera-video-off me-1"></i>Apagar cámara'
+      : '<i class="bi bi-camera-video me-1"></i>Activar cámara';
   }
 
   /** Anuncia la victoria si alguna de tus manos ganó (llega aunque mires otra mesa). */
@@ -399,7 +414,8 @@ window.BlackjackUI = (() => {
       $('#bj-dealer-total').textContent = '';
       $('#bj-phase').textContent = 'Cargando mesa…';
       $('#bj-hint').textContent = '';
-      for (const sel of ['#bj-bet', '#bj-actions', '#bj-leave']) $(sel).classList.add('hidden');
+      for (const sel of ['#bj-bet', '#bj-actions', '#bj-leave', '#bj-camera']) $(sel).classList.add('hidden');
+      ctx.camera.resetViewing();
       renderTables();
       // Cada mesa tiene su chat; solo se cambia si se está viendo el blackjack.
       if (!$('#blackjack').classList.contains('hidden')) {
@@ -462,7 +478,14 @@ window.BlackjackUI = (() => {
       });
     });
 
+    $('#bj-camera').addEventListener('click', () => (ctx.camera.isOn() ? ctx.camera.stop() : ctx.camera.start()));
+    document.addEventListener('camera:change', () => {
+      renderCameraButton();
+      if (state) render(); // mi recuadro de vídeo aparece o desaparece
+    });
+
     $('#bj-leave').addEventListener('click', async () => {
+      ctx.camera.stop();
       const res = await ctx.emit('bj:leave');
       if (!res.ok) ctx.toast(res.error, 'error');
     });
@@ -478,6 +501,8 @@ window.BlackjackUI = (() => {
       lobby = tables;
       // Al entrar (o recargar) se abre directamente la mesa donde estás sentado.
       const mine = myTable();
+      // Si me levantaron (p. ej. por desconexión), mi cámara ya no tiene silla.
+      if (!mine && ctx.camera.isOn()) ctx.camera.stop({ notify: false });
       if (!lobbyReceived && mine && mine.id !== currentTable) watch(mine.id);
       lobbyReceived = true;
       renderTables();

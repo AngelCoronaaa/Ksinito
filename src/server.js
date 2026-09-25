@@ -22,6 +22,18 @@ const PORT = Number(process.env.PORT) || 3000;
 const LEAVE_GRACE_MS = 20_000; // tiempo para recargar la página sin perder el asiento
 const EVENTS_PER_SECOND = 15;
 const BLACKJACK_TABLES = 5;
+const RTC_SIGNALS_PER_SECOND = 60; // candidatos ICE de varias cámaras a la vez
+
+// Servidores STUN/TURN para las cámaras (WebRTC). Con solo STUN, algunas redes (datos
+// móviles, redes corporativas) no conectan; para ellas hace falta un TURN en RTC_ICE_SERVERS.
+const ICE_SERVERS = (() => {
+  try {
+    if (process.env.RTC_ICE_SERVERS) return JSON.parse(process.env.RTC_ICE_SERVERS);
+  } catch {
+    console.warn('[rtc] RTC_ICE_SERVERS no es JSON válido; se usa el STUN por defecto');
+  }
+  return [{ urls: 'stun:stun.l.google.com:19302' }];
+})();
 
 const app = express();
 app.disable('x-powered-by');
@@ -32,6 +44,8 @@ app.use((req, res, next) => {
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
     'Referrer-Policy': 'same-origin',
+    // La cámara solo la pide esta web (mesa de blackjack); micrófono y ubicación no se usan.
+    'Permissions-Policy': 'camera=(self), microphone=(), geolocation=()',
     'Content-Security-Policy':
       "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'",
   });
@@ -128,6 +142,46 @@ function requireTable(userId) {
   return table;
 }
 
+/**
+ * Mesa por la que dos sockets pueden intercambiar señales WebRTC: uno emite cámara en
+ * ella y el otro la está mirando. Sin esto, cualquiera podría escribir a cualquier socket.
+ */
+function rtcTableFor(a, b) {
+  for (const table of tables.values()) {
+    const cams = table.cameraSockets();
+    if ((cams.includes(a.id) && b.rooms.has(table.room)) || (cams.includes(b.id) && a.rooms.has(table.room))) return table;
+  }
+  return null;
+}
+
+/** Solo se reenvían los campos que usa el cliente, con tamaños acotados. */
+function cleanSignal(msg) {
+  const kinds = ['want', 'offer', 'answer', 'candidate', 'bye'];
+  if (!msg || typeof msg !== 'object' || !kinds.includes(msg.kind) || typeof msg.to !== 'string') return null;
+  const out = { kind: msg.kind };
+  if (msg.kind === 'offer' || msg.kind === 'answer') {
+    if (typeof msg.sdp !== 'string' || msg.sdp.length > 20_000) return null;
+    out.sdp = msg.sdp;
+  }
+  if (msg.kind === 'candidate') {
+    const c = msg.candidate;
+    if (!c || typeof c.candidate !== 'string' || c.candidate.length > 1_000) return null;
+    out.candidate = {
+      candidate: c.candidate,
+      sdpMid: typeof c.sdpMid === 'string' ? c.sdpMid.slice(0, 64) : null,
+      sdpMLineIndex: Number.isInteger(c.sdpMLineIndex) ? c.sdpMLineIndex : null,
+    };
+  }
+  return out;
+}
+
+/** Avisa a quienes emiten cámara de que este socket ya no mira (cierran su conexión con él). */
+function rtcGone(socketId) {
+  for (const table of tables.values()) {
+    for (const cam of table.cameraSockets()) if (cam !== socketId) io.to(cam).emit('rtc:gone', { peer: socketId });
+  }
+}
+
 // Cada cambio de saldo se envía a todas las pestañas abiertas del usuario.
 wallet.events.on('balance', (userId, credits) => io.to(`user:${userId}`).emit('balance', { credits }));
 
@@ -172,6 +226,7 @@ io.on('connection', (socket) => {
   socket.emit('roulette:state', roulette.publicState());
   socket.emit('roulette:bets', roulette.userBets(user.id));
   socket.emit('bj:lobby', lobbyState());
+  socket.emit('rtc:config', { iceServers: ICE_SERVERS });
   // Lo que viene de MySQL llega un poco después; los eventos se registran antes (abajo)
   // para no perder nada de lo que el cliente envíe nada más conectar.
   (async () => {
@@ -209,6 +264,7 @@ io.on('connection', (socket) => {
   on('roulette:clear', () => roulette.clearBets(user));
   // Mirar una mesa: deja la sala de la anterior y recibe el estado de la nueva.
   const watch = (table) => {
+    if (!socket.rooms.has(table.room)) rtcGone(socket.id); // deja de ver las cámaras de la mesa anterior
     for (const other of tables.values()) if (other !== table) socket.leave(other.room);
     socket.join(table.room);
   };
@@ -228,6 +284,23 @@ io.on('connection', (socket) => {
     })
   );
   on('bj:leave', () => tableOf(user.id)?.leave(user.id));
+  // Cámara del jugador sentado (la emite este socket; solo vídeo, sin audio).
+  on('bj:camera', (p) => requireTable(user.id).setCamera(user.id, p.on === true ? socket.id : null));
+
+  // Señalización WebRTC: se reenvía sin pasar por on() para no gastar su límite ni responder.
+  let rtcTokens = RTC_SIGNALS_PER_SECOND;
+  let rtcLast = Date.now();
+  socket.on('rtc:signal', (msg) => {
+    const now = Date.now();
+    rtcTokens = Math.min(RTC_SIGNALS_PER_SECOND, rtcTokens + ((now - rtcLast) / 1000) * RTC_SIGNALS_PER_SECOND);
+    rtcLast = now;
+    if (rtcTokens < 1) return;
+    rtcTokens -= 1;
+    const signal = cleanSignal(msg);
+    const target = signal && io.sockets.sockets.get(msg.to);
+    if (!target || target === socket || !rtcTableFor(socket, target)) return;
+    target.emit('rtc:signal', { ...signal, from: socket.id, fromUser: user.id });
+  });
 
   // Solo se escribe en la ruleta o en la mesa que se está mirando (su sala).
   on('chat:send', async (p) => {
@@ -240,6 +313,11 @@ io.on('connection', (socket) => {
   on('bj:action', (p) => requireTable(user.id).act(user, p.action));
 
   socket.on('disconnect', () => {
+    // Su cámara (si la emitía) se apaga ya; el asiento se conserva unos segundos.
+    for (const table of tables.values()) {
+      table.clearCamera(socket.id).catch((err) => console.error('[blackjack] Al apagar la cámara', err));
+    }
+    rtcGone(socket.id);
     const remaining = (connections.get(user.id) ?? 1) - 1;
     if (remaining > 0) return connections.set(user.id, remaining);
     connections.delete(user.id);

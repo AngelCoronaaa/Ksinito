@@ -812,7 +812,7 @@ button.chip:hover { transform: translateY(-3px) rotate(-10deg); }
 .seat.turn { border-color: var(--gold); animation: turnGlow 1.3s ease-in-out infinite alternate; }
 .seat.won { border-color: var(--win); box-shadow: 0 0 0 1px var(--win), 0 0 30px rgba(61, 220, 132, .35); }
 .seat.lost { opacity: .7; }
-.seat-plate { display: flex; flex-direction: column; align-items: center; gap: 4px; max-width: 100%; }
+.seat-plate { display: flex; flex-direction: column; align-items: center; gap: 4px; align-self: stretch; min-width: 0; }
 .seat-plate .avatar {
   width: 48px;
   height: 48px;
@@ -1034,6 +1034,68 @@ button.chip:hover { transform: translateY(-3px) rotate(-10deg); }
 .celebrate.big .c-amount { font-size: clamp(3.6rem, 15vw, 7.5rem); }
 .c-detail { color: var(--muted); font-size: .92rem; font-weight: 600; letter-spacing: .04em; }
 .confetti-canvas { position: fixed; inset: 0; z-index: 1085; width: 100%; height: 100%; pointer-events: none; }
+
+/* ---------- cámaras en la mesa ---------- */
+.seat-cam {
+  position: relative;
+  width: 100%;
+  max-width: 168px;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  border: 2px solid rgba(232, 196, 106, .6);
+  background: #0b1812;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, .45);
+  transition: border-color .3s, box-shadow .3s;
+}
+.seat-cam .avatar { width: 48px; height: 48px; font-size: 1.15rem; }
+.seat-cam video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity .4s;
+}
+.seat-cam video.live { opacity: 1; }
+.seat-cam video.mirror { transform: scaleX(-1); } /* tu propia imagen, como en un espejo */
+.cam-live {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, .6);
+  color: #fff;
+  font-size: .6rem;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.cam-live::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--lose); animation: pulseText 1.4s ease-in-out infinite; }
+.seat.turn .seat-cam { border-color: var(--gold-bright); box-shadow: 0 0 0 3px rgba(247, 220, 143, .35), 0 0 18px rgba(232, 196, 106, .6); }
+.seat.won .seat-cam { border-color: var(--win); }
+#bj-camera.on { --bs-btn-border-color: rgba(255, 107, 94, .5); --bs-btn-color: #ffb4ac; }
+.camera-prompt { padding: 32px 28px 28px; }
+.camera-icon {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 14px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 30px;
+  color: #1d1504;
+  background: radial-gradient(circle at 32% 28%, var(--gold-bright), var(--gold-deep));
+  box-shadow: 0 0 0 7px rgba(232, 196, 106, .1), 0 12px 32px rgba(232, 196, 106, .3);
+}
 
 /* ---------- ID de jugador y transferencias ---------- */
 .id-pill {
