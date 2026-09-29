@@ -6,5 +6,21 @@
     "title": "Ksinito — Ruleta y Blackjack en vivo",
     "active": true,
     "weight": 1
+  },
+  {
+    "id": "colxsoft-01",
+    "type": "image",
+    "src": "/spots/colxsoft-01.jpg",
+    "title": "ColxSoft — diseño y desarrollo web de alta gama",
+    "active": true,
+    "weight": 1
+  },
+  {
+    "id": "stardest-01",
+    "type": "image",
+    "src": "/spots/stardest-01.jpg",
+    "title": "Stardest — despliegues en la nube sin límites",
+    "active": true,
+    "weight": 1
   }
 ]
