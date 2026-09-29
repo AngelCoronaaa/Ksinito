@@ -688,6 +688,10 @@ button.chip:hover { transform: translateY(-3px) rotate(-10deg); }
 .stake.pop { animation: pop .4s var(--ease-spring); }
 
 .bet-controls { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 18px; }
+/* Columna limitada al ancho disponible: sin esto, el historial en una fila (móvil) y el paño
+   ensanchan la columna y la página entera se sale de la pantalla. */
+.rl-side { grid-template-columns: minmax(0, 1fr); }
+.rl-history { min-width: 0; }
 
 /* ---------- blackjack ---------- */
 .bj-table {
