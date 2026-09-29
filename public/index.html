@@ -73,9 +73,9 @@
             <i class="bi bi-coin"></i><span id="credits">0</span>
             <span id="credits-delta" class="credits-delta"></span>
           </div>
-          <span id="ad-wrap" class="ad-wrap hidden">
-            <button type="button" id="ad-open" class="btn btn-glass ad-btn" aria-label="Mira un anuncio y gana créditos">
-              <i class="bi bi-play-circle-fill" aria-hidden="true"></i><span id="ad-label">+100</span>
+          <span id="rw-wrap" class="rw-wrap hidden">
+            <button type="button" id="rw-open" class="btn btn-glass rw-btn" aria-label="Mira un anuncio y gana créditos">
+              <i class="bi bi-play-circle-fill" aria-hidden="true"></i><span id="rw-label">+100</span>
             </button>
           </span>
           <button type="button" id="transfer-open" class="btn btn-glass btn-icon" title="Enviar créditos" aria-label="Enviar créditos">
@@ -304,40 +304,40 @@
       </div>
     </div>
 
-    <div class="modal fade" id="ad-modal" tabindex="-1" aria-labelledby="ad-title" aria-hidden="true"
+    <div class="modal fade" id="rw-modal" tabindex="-1" aria-labelledby="rw-title" aria-hidden="true"
          data-bs-backdrop="static" data-bs-keyboard="false">
       <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content profile-modal ad-modal">
+        <div class="modal-content profile-modal rw-modal">
           <div class="modal-header border-0 pb-0">
-            <h2 class="modal-title panel-title" id="ad-title"><i class="bi bi-play-circle me-1"></i>Anuncio patrocinado</h2>
+            <h2 class="modal-title panel-title" id="rw-title"><i class="bi bi-play-circle me-1"></i>Anuncio patrocinado</h2>
           </div>
           <div class="modal-body">
-            <div class="ad-stage">
-              <div id="ad-media" class="ad-media"></div>
-              <button type="button" id="ad-sound" class="btn btn-glass btn-icon ad-sound hidden" aria-label="Activar sonido" aria-pressed="false">
+            <div class="rw-stage">
+              <div id="rw-media" class="rw-media"></div>
+              <button type="button" id="rw-sound" class="btn btn-glass btn-icon rw-sound hidden" aria-label="Activar sonido" aria-pressed="false">
                 <i class="bi bi-volume-mute-fill"></i>
               </button>
             </div>
-            <div class="ad-caption">
-              <span id="ad-title-text" class="ad-title"></span>
-              <a id="ad-link" class="btn btn-glass btn-sm hidden" target="_blank" rel="noopener noreferrer">
+            <div class="rw-caption">
+              <span id="rw-title-text" class="rw-title"></span>
+              <a id="rw-link" class="btn btn-glass btn-sm hidden" target="_blank" rel="noopener noreferrer">
                 Ver más<i class="bi bi-box-arrow-up-right ms-1"></i>
               </a>
             </div>
             <div class="phase-box">
               <div class="d-flex justify-content-between align-items-baseline gap-2">
-                <span id="ad-hint" class="ad-status" aria-hidden="true"></span>
-                <span id="ad-status" class="visually-hidden" aria-live="polite"></span>
-                <span id="ad-timer" class="timer" aria-hidden="true"></span>
+                <span id="rw-hint" class="rw-status" aria-hidden="true"></span>
+                <span id="rw-status" class="visually-hidden" aria-live="polite"></span>
+                <span id="rw-timer" class="timer" aria-hidden="true"></span>
               </div>
               <div class="progress phase-progress" role="progressbar" aria-label="Tiempo del anuncio">
-                <div id="ad-progress" class="progress-bar"></div>
+                <div id="rw-progress" class="progress-bar"></div>
               </div>
             </div>
-            <p id="ad-error" class="error mb-0 mt-2" role="alert"></p>
-            <div class="ad-actions">
-              <button type="button" id="ad-claim" class="btn btn-gold" disabled>
-                <i class="bi bi-gift-fill me-1"></i><span id="ad-claim-label">Reclamar 100 créditos</span>
+            <p id="rw-error" class="error mb-0 mt-2" role="alert"></p>
+            <div class="rw-actions">
+              <button type="button" id="rw-claim" class="btn btn-gold" disabled>
+                <i class="bi bi-gift-fill me-1"></i><span id="rw-claim-label">Reclamar 100 créditos</span>
               </button>
               <button type="button" class="btn btn-glass" data-bs-dismiss="modal">Cancelar</button>
             </div>
@@ -402,7 +402,7 @@
   <script src="/js/blackjack.js"></script>
   <script src="/js/chat.js"></script>
   <script src="/js/transfer.js"></script>
-  <script src="/js/ads.js"></script>
+  <script src="/js/rewards.js"></script>
   <script src="/js/media.js"></script>
   <script src="/js/ducks.js"></script>
   <script src="/js/app.js"></script>

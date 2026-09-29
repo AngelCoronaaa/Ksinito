@@ -129,7 +129,7 @@ Al arrancar, la app espera hasta ~1 minuto a que MySQL responda. `GET /api/healt
 
 ### Añadir un anuncio
 
-1. Copia el archivo en `public/ads/`: vídeo MP4 o WebM, o imagen WebP o JPEG (mejor 16:9). Si
+1. Copia el archivo en `public/spots/`: vídeo MP4 o WebM, o imagen WebP o JPEG (mejor 16:9). Si
    cambias un anuncio, usa un nombre de archivo nuevo: Cloudflare y los navegadores guardan en
    caché el anterior.
 2. Añádelo a `src/ads.config.json` (no es público) y reinicia la app:
@@ -138,7 +138,7 @@ Al arrancar, la app espera hasta ~1 minuto a que MySQL responda. `GET /api/healt
    {
      "id": "colxsoft-01",
      "type": "video",
-     "src": "/ads/colxsoft-01.mp4",
+     "src": "/spots/colxsoft-01.mp4",
      "title": "ColxSoft — desarrollo web a la medida",
      "link": "https://ejemplo.com",
      "active": true,
@@ -147,7 +147,7 @@ Al arrancar, la app espera hasta ~1 minuto a que MySQL responda. `GET /api/healt
    ```
 
    - `id`: único, de 1 a 64 letras, números, `.`, `_` o `-`.
-   - `type`: `video` o `image`. `src`: un archivo que exista directamente en `public/ads/`.
+   - `type`: `video` o `image`. `src`: un archivo que exista directamente en `public/spots/`.
    - `link` (opcional): `https://`. Aparece el botón *Ver más*, que abre en otra pestaña.
    - `active: false` lo retira sin borrarlo. `weight` (entero de 1 a 1000): los de más peso
      salen más a menudo.
@@ -157,6 +157,10 @@ Al arrancar, la app espera hasta ~1 minuto a que MySQL responda. `GET /api/healt
 - Solo anuncios propios, servidos desde el mismo dominio: no se carga nada de redes
   publicitarias. La elección del anuncio está en `pickAd()` (`src/ads.js`), para poder
   cambiarla por un proveedor externo sin tocar la lógica de recompensa.
+- **Bloqueadores de anuncios:** uBlock, AdBlock o Brave ocultan elementos con nombres como
+  `#ad-wrap` o `.ad-btn` y bloquean rutas `/ads/` en algunos dominios. Por eso el cliente usa
+  `js/rewards.js` e ids/clases `rw-*`, y los archivos van en `public/spots/`. No uses "ad" o
+  "ads" en nombres nuevos del cliente.
 
 ## Patos
 
@@ -248,7 +252,7 @@ src/
   profile.js    Rutas para subir, quitar y servir la foto
   transfers.js  Envío de créditos entre jugadores por ID
   ads.js        Anuncios con recompensa: catálogo, límites, token de un solo uso y rutas
-  ads.config.json  Catálogo de anuncios (archivos en public/ads/)
+  ads.config.json  Catálogo de anuncios (archivos en public/spots/)
   chat.js       Chat de la ruleta y de cada mesa (el servidor también reenvía la
                 señalización WebRTC de las cámaras, en server.js)
   wallet.js     Único módulo que modifica créditos
@@ -259,7 +263,7 @@ src/
 public/         Cliente: Bootstrap 5 + Bootstrap Icons, JS sin frameworks y sin build.
                 Bootstrap, iconos, fuentes (Inter, Cinzel) y canvas-confetti se sirven
                 desde node_modules en /vendor (mismo origen, sin CDN).
-  ads/          Vídeos e imágenes de los anuncios con recompensa
+  spots/        Vídeos e imágenes de los anuncios con recompensa
   js/ducks.js   Juego de patos en el navegador (canvas, sonidos, marcador)
   js/duck-path.js  Trayectoria de los patos (módulo ESM que usan el navegador y el servidor)
 test/           Pruebas (npm test, con node:test)

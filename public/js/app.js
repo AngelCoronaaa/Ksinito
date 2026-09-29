@@ -373,6 +373,16 @@
     location.reload();
   });
 
+  // En pantallas estrechas las barras de apuesta son `position: fixed`: su sección reserva
+  // su altura abajo (--dock-h) para que la barra no tape el final de la mesa.
+  for (const dock of document.querySelectorAll('.dock, .dock-sm')) {
+    const game = dock.closest('.game');
+    new ResizeObserver(() => {
+      const fixed = getComputedStyle(dock).position === 'fixed' && dock.offsetHeight > 0;
+      game.style.setProperty('--dock-h', fixed ? `${dock.offsetHeight + 20}px` : '0px');
+    }).observe(dock);
+  }
+
   // ---------- pestañas ----------
 
   document.querySelectorAll('.tabs button').forEach((btn) => {
@@ -442,7 +452,7 @@
     };
     window.ChatUI.init(ctx);
     window.TransferUI.init(ctx);
-    window.AdsUI.init(ctx);
+    window.RewardsUI?.init(ctx); // si un bloqueador de anuncios impide cargarlo, el resto sigue
     window.MediaUI.init(ctx);
     window.RouletteUI.init(ctx);
     window.BlackjackUI.init(ctx);

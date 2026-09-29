@@ -1,10 +1,12 @@
 'use strict';
 
-// Botón "+100" y modal del anuncio con recompensa. El contador de aquí es solo para el
+// Botón "+100" y modal del anuncio con recompensa. Ni el archivo ni los id/clases usan "ad"/"ads":
+// los bloqueadores de anuncios (EasyList: ###ad-wrap, ##.ad-btn…) los ocultarían.
+// El contador de aquí es solo para el
 // jugador (se pausa si cambia de pestaña): el servidor comprueba el tiempo por su cuenta
 // al reclamar. El token del anuncio se guarda solo en memoria; al recargar, /start devuelve
 // el mismo anuncio pendiente.
-window.AdsUI = (() => {
+window.RewardsUI = (() => {
   const $ = (sel) => document.querySelector(sel);
   const fmt = (n) => n.toLocaleString('es');
   const mmss = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
@@ -36,14 +38,14 @@ window.AdsUI = (() => {
 
   function setTip(text) {
     tip = text;
-    $('#ad-open').setAttribute('aria-label', text);
+    $('#rw-open').setAttribute('aria-label', text);
     if (tooltip) tooltip.setContent({ '.tooltip-inner': text });
   }
 
   function renderButton() {
     clearInterval(cooldownTimer);
-    const wrap = $('#ad-wrap');
-    const btn = $('#ad-open');
+    const wrap = $('#rw-wrap');
+    const btn = $('#rw-open');
     wrap.classList.toggle('hidden', !status?.enabled);
     if (!status?.enabled) return tooltip?.hide();
 
@@ -54,10 +56,10 @@ window.AdsUI = (() => {
     else wrap.removeAttribute('tabindex');
 
     if (status.available) {
-      $('#ad-label').textContent = reward;
+      $('#rw-label').textContent = reward;
       setTip(`Mira un anuncio y gana ${fmt(status.reward)} créditos`);
     } else if (status.remainingToday === 0) {
-      $('#ad-label').textContent = reward;
+      $('#rw-label').textContent = reward;
       setTip('Vuelve mañana');
     } else {
       cooldownEnd = performance.now() + status.cooldownSeconds * 1000;
@@ -74,7 +76,7 @@ window.AdsUI = (() => {
       refreshStatus();
       return;
     }
-    $('#ad-label').textContent = mmss(left);
+    $('#rw-label').textContent = mmss(left);
   }
 
   /** Pide el estado del botón. Si ya hay una petición en curso, repite al terminar. */
@@ -103,7 +105,7 @@ window.AdsUI = (() => {
   async function start() {
     if (starting) return;
     starting = true;
-    $('#ad-open').disabled = true;
+    $('#rw-open').disabled = true;
     tooltip.hide();
     try {
       show(await ctx.api('/api/ads/start', {}));
@@ -118,25 +120,25 @@ window.AdsUI = (() => {
 
   // ---------- modal ----------
 
-  const setError = (message) => { $('#ad-error').textContent = message; };
+  const setError = (message) => { $('#rw-error').textContent = message; };
 
   /** Texto para lectores de pantalla (aria-live): solo se cambia cuando dice algo nuevo. */
   function say(text) {
     if (text === spoken) return;
     spoken = text;
-    $('#ad-status').textContent = text;
+    $('#rw-status').textContent = text;
   }
 
-  const hint = (text) => { $('#ad-hint').textContent = text; };
+  const hint = (text) => { $('#rw-hint').textContent = text; };
 
   function video() {
-    return $('#ad-media video');
+    return $('#rw-media video');
   }
 
   function renderMedia(ad) {
-    const box = $('#ad-media');
+    const box = $('#rw-media');
     box.classList.toggle('is-image', ad.type !== 'video');
-    $('#ad-sound').classList.toggle('hidden', ad.type !== 'video');
+    $('#rw-sound').classList.toggle('hidden', ad.type !== 'video');
     let el;
     if (ad.type === 'video') {
       el = document.createElement('video');
@@ -159,8 +161,8 @@ window.AdsUI = (() => {
       el.decoding = 'async';
     }
     box.replaceChildren(el);
-    $('#ad-title-text').textContent = ad.title;
-    const link = $('#ad-link');
+    $('#rw-title-text').textContent = ad.title;
+    const link = $('#rw-link');
     link.classList.toggle('hidden', !ad.link);
     if (ad.link) link.href = ad.link;
     else link.removeAttribute('href');
@@ -169,7 +171,7 @@ window.AdsUI = (() => {
   function setSound(on, el = video()) {
     if (!el) return;
     el.muted = !on;
-    const btn = $('#ad-sound');
+    const btn = $('#rw-sound');
     btn.querySelector('i').className = `bi ${on ? 'bi-volume-up-fill' : 'bi-volume-mute-fill'}`;
     btn.setAttribute('aria-label', on ? 'Silenciar anuncio' : 'Activar sonido');
     btn.setAttribute('aria-pressed', String(on));
@@ -181,8 +183,8 @@ window.AdsUI = (() => {
     spoken = '';
     setError('');
     renderMedia(data.ad);
-    $('#ad-claim-label').textContent = `Reclamar ${fmt(data.reward)} créditos`;
-    $('#ad-claim').disabled = true;
+    $('#rw-claim-label').textContent = `Reclamar ${fmt(data.reward)} créditos`;
+    $('#rw-claim').disabled = true;
     modal.show();
     tickAt = performance.now();
     clearInterval(ticker);
@@ -199,11 +201,11 @@ window.AdsUI = (() => {
 
     const total = current.duration * 1000;
     const left = Math.max(0, Math.ceil((total - elapsed) / 1000));
-    $('#ad-progress').style.width = `${total ? Math.min(100, (elapsed / total) * 100) : 100}%`;
-    $('#ad-timer').textContent = left ? `${left} s` : '';
+    $('#rw-progress').style.width = `${total ? Math.min(100, (elapsed / total) * 100) : 100}%`;
+    $('#rw-timer').textContent = left ? `${left} s` : '';
     if (left === 0) {
       clearInterval(ticker);
-      if (!claiming) $('#ad-claim').disabled = false;
+      if (!claiming) $('#rw-claim').disabled = false;
       hint('¡Listo!');
       say(`¡Listo! Ya puedes reclamar tus ${fmt(current.reward)} créditos.`);
       return;
@@ -248,7 +250,7 @@ window.AdsUI = (() => {
   async function claim() {
     if (!current || claiming) return;
     claiming = true;
-    $('#ad-claim').disabled = true;
+    $('#rw-claim').disabled = true;
     setError('');
     try {
       const { reward } = await claimToken(current.token);
@@ -261,7 +263,7 @@ window.AdsUI = (() => {
       setError(err.message);
       // Caducado, ya cobrado o inexistente: este anuncio ya no se puede reclamar.
       if ([404, 409, 410].includes(err.status)) current = null;
-      else $('#ad-claim').disabled = false;
+      else $('#rw-claim').disabled = false;
     } finally {
       claiming = false; // el botón se actualiza al cerrarse el modal
     }
@@ -275,7 +277,7 @@ window.AdsUI = (() => {
       el.removeAttribute('src');
       el.load(); // corta la descarga del vídeo
     }
-    $('#ad-media').replaceChildren();
+    $('#rw-media').replaceChildren();
     // Si se canceló, el anuncio sigue pendiente en el servidor: el botón lo retoma con el mismo token.
     current = null;
     refreshStatus();
@@ -283,7 +285,7 @@ window.AdsUI = (() => {
 
   /** Se cobró un anuncio (en esta u otra pestaña). */
   function onClaimed() {
-    if (current && !claiming && $('#ad-modal').classList.contains('show')) {
+    if (current && !claiming && $('#rw-modal').classList.contains('show')) {
       current = null;
       modal.hide(); // otra pestaña cobró este mismo anuncio
     }
@@ -292,17 +294,17 @@ window.AdsUI = (() => {
 
   function init(appCtx) {
     ctx = appCtx;
-    modal = window.bootstrap.Modal.getOrCreateInstance($('#ad-modal'));
-    tooltip = new window.bootstrap.Tooltip($('#ad-wrap'), { title: () => tip, placement: 'bottom', trigger: 'hover focus' });
-    $('#ad-open').addEventListener('click', start);
-    $('#ad-claim').addEventListener('click', claim);
-    $('#ad-sound').addEventListener('click', () => {
+    modal = window.bootstrap.Modal.getOrCreateInstance($('#rw-modal'));
+    tooltip = new window.bootstrap.Tooltip($('#rw-wrap'), { title: () => tip, placement: 'bottom', trigger: 'hover focus' });
+    $('#rw-open').addEventListener('click', start);
+    $('#rw-claim').addEventListener('click', claim);
+    $('#rw-sound').addEventListener('click', () => {
       const el = video();
       if (!el) return;
       setSound(el.muted);
       el.play().catch(() => {});
     });
-    $('#ad-modal').addEventListener('hidden.bs.modal', onHidden);
+    $('#rw-modal').addEventListener('hidden.bs.modal', onHidden);
     document.addEventListener('visibilitychange', onVisibility);
     ctx.socket.on('ads:claimed', onClaimed);
     refreshStatus();

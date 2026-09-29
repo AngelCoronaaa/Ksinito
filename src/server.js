@@ -92,7 +92,7 @@ app.use('/vendor/fonts/cinzel', vendor('@fontsource/cinzel'));
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const assetsHash = crypto.createHash('sha256').update(JSON.stringify(require('../package.json').dependencies));
 for (const file of fs.readdirSync(PUBLIC_DIR, { recursive: true }).sort()) {
-  if (file.split(path.sep)[0] === 'ads') continue; // los anuncios no van en index.html (y los vídeos pesan)
+  if (file.split(path.sep)[0] === 'spots') continue; // los anuncios no van en index.html (y los vídeos pesan)
   const full = path.join(PUBLIC_DIR, file);
   if (fs.statSync(full).isFile()) assetsHash.update(file).update(fs.readFileSync(full));
 }

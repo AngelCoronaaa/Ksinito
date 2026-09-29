@@ -1,6 +1,6 @@
 'use strict';
 
-// Anuncios con recompensa: el jugador ve un anuncio propio (archivos en public/ads/,
+// Anuncios con recompensa: el jugador ve un anuncio propio (archivos en public/spots/,
 // catálogo en src/ads.config.json) y recibe créditos al terminar.
 //
 // El servidor es la única autoridad. /start crea un registro con un token aleatorio y
@@ -52,9 +52,11 @@ class AdError extends GameError {
 // ---------- catálogo ----------
 
 const CATALOG_FILE = path.join(__dirname, 'ads.config.json');
-const ADS_DIR = path.join(__dirname, '..', 'public', 'ads');
+// Los archivos van en public/spots/ y no en public/ads/: los bloqueadores de anuncios
+// (EasyList, uBlock…) bloquean rutas /ads/ en algunos dominios.
+const ADS_DIR = path.join(__dirname, '..', 'public', 'spots');
 const ID_RE = /^[A-Za-z0-9._-]{1,64}$/; // cabe en ad_rewards.ad_id
-const SRC_RE = /^\/ads\/[A-Za-z0-9][A-Za-z0-9._-]*$/; // un archivo directamente en public/ads/
+const SRC_RE = /^\/spots\/[A-Za-z0-9][A-Za-z0-9._-]*$/; // un archivo directamente en public/spots/
 const EXTENSIONS = { video: ['.mp4', '.webm'], image: ['.webp', '.jpg', '.jpeg'] };
 
 /** Motivo por el que una entrada del catálogo no vale, o null si es correcta. */
@@ -63,11 +65,11 @@ function invalidReason(ad, ids) {
   if (typeof ad.id !== 'string' || !ID_RE.test(ad.id)) return '`id` debe tener de 1 a 64 letras, números, ".", "_" o "-"';
   if (ids.has(ad.id)) return `el id "${ad.id}" está repetido`;
   if (!Object.hasOwn(EXTENSIONS, ad.type)) return '`type` debe ser "video" o "image"';
-  if (typeof ad.src !== 'string' || !SRC_RE.test(ad.src)) return '`src` debe ser un archivo de /ads/ (p. ej. "/ads/mi-anuncio.mp4")';
+  if (typeof ad.src !== 'string' || !SRC_RE.test(ad.src)) return '`src` debe ser un archivo de /spots/ (p. ej. "/spots/mi-anuncio.mp4")';
   if (!EXTENSIONS[ad.type].includes(path.extname(ad.src).toLowerCase())) {
     return `un anuncio de tipo ${ad.type} debe ser ${EXTENSIONS[ad.type].join(', ')}`;
   }
-  if (!fs.existsSync(path.join(ADS_DIR, ad.src.slice('/ads/'.length)))) return `no existe public${ad.src}`;
+  if (!fs.existsSync(path.join(ADS_DIR, ad.src.slice('/spots/'.length)))) return `no existe public${ad.src}`;
   if (typeof ad.title !== 'string' || !ad.title.trim() || ad.title.length > 120) return '`title` debe tener de 1 a 120 caracteres';
   if (ad.link !== undefined && ad.link !== null) {
     let url = null;

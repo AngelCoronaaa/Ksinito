@@ -1347,8 +1347,8 @@ button.chat-name:hover { text-decoration: underline; }
 
 /* ---------- anuncios con recompensa ---------- */
 /* El envoltorio recibe el ratón y el foco cuando el botón está desactivado (para el aviso). */
-.ad-wrap { display: inline-flex; border-radius: 999px; }
-.ad-btn {
+.rw-wrap { display: inline-flex; border-radius: 999px; }
+.rw-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1359,26 +1359,26 @@ button.chat-name:hover { text-decoration: underline; }
   --bs-btn-hover-color: var(--gold-bright);
   --bs-btn-disabled-color: var(--muted);
 }
-.ad-btn .bi { font-size: 1.15rem; }
-.ad-modal .modal-body { padding: 12px 24px 24px; }
-.ad-stage { position: relative; }
-.ad-media {
+.rw-btn .bi { font-size: 1.15rem; }
+.rw-modal .modal-body { padding: 12px 24px 24px; }
+.rw-stage { position: relative; }
+.rw-media {
   aspect-ratio: 16 / 9;
   overflow: hidden;
   border-radius: 14px;
   border: 1px solid var(--panel-border);
   background: #000;
 }
-.ad-media video, .ad-media img { display: block; width: 100%; height: 100%; object-fit: contain; }
-.ad-media.is-image { aspect-ratio: auto; }
-.ad-media.is-image img { height: auto; max-height: 60vh; }
-.ad-sound { position: absolute; right: 10px; bottom: 10px; background-color: rgba(0, 0, 0, .55); }
-.ad-caption { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 12px 0 4px; }
-.ad-title { font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
-.ad-caption .btn { flex-shrink: 0; }
-.ad-status { color: var(--muted); font-size: .9rem; }
-.ad-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 8px; }
-.ad-actions .btn { padding-left: 22px; padding-right: 22px; }
+.rw-media video, .rw-media img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.rw-media.is-image { aspect-ratio: auto; }
+.rw-media.is-image img { height: auto; max-height: 60vh; }
+.rw-sound { position: absolute; right: 10px; bottom: 10px; background-color: rgba(0, 0, 0, .55); }
+.rw-caption { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 12px 0 4px; }
+.rw-title { font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+.rw-caption .btn { flex-shrink: 0; }
+.rw-status { color: var(--muted); font-size: .9rem; }
+.rw-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 8px; }
+.rw-actions .btn { padding-left: 22px; padding-right: 22px; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -1393,20 +1393,27 @@ button.chat-name:hover { text-decoration: underline; }
 
 /* ---------- responsive ---------- */
 @media (max-width: 991.98px) {
-  /* Ruleta en una columna: historial arriba, paño, y las fichas en una barra fija abajo. */
+  /* Ruleta en una columna: historial arriba y después el paño. */
   .rl-side > .rl-history { order: -1; }
-  .dock-sm {
-    order: 1;
-    position: sticky;
-    bottom: 8px;
-    z-index: 20;
-    background: linear-gradient(180deg, rgba(20, 40, 31, .97), rgba(10, 22, 17, .97));
-    box-shadow: 0 -6px 26px rgba(0, 0, 0, .4), 0 18px 40px rgba(0, 0, 0, .32), inset 0 1px 0 rgba(255, 255, 255, .05);
+  /* Barras de apuesta fijas abajo de la pantalla. `fixed` y no `sticky`: en Safari de iOS la barra
+     sticky que pisaba el paño (contenedor con scroll horizontal) se pintaba vacía. La sección
+     reserva su altura abajo con --dock-h (app.js) para que no tape el final de la mesa. */
+  .dock, .dock-sm {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    z-index: 1030; /* bajo el chat (1040) y los modales */
+    margin: 0;
+    /* Hueco a la derecha para el botón flotante del chat, que queda encima de la barra. */
+    padding: 10px 84px 10px 14px;
+    background: linear-gradient(180deg, rgba(20, 40, 31, .98), rgba(10, 22, 17, .98));
+    box-shadow: 0 -6px 26px rgba(0, 0, 0, .45), 0 18px 40px rgba(0, 0, 0, .32), inset 0 1px 0 rgba(255, 255, 255, .05);
   }
-  .dock { bottom: 8px; }
-  /* Hueco a la derecha para el botón flotante del chat, que queda encima de la barra. */
-  .dock, .dock-sm { padding: 10px 84px 10px 14px; }
-  .bj-controls { gap: 10px; margin-top: 16px; }
+  .game { padding-bottom: var(--dock-h, 0px); }
+  /* Un transform en la sección haría que la barra fija se colocara respecto a ella durante la entrada. */
+  .game-enter { animation-name: fadeIn; }
+  .bj-controls { gap: 10px; }
   .bet-controls { justify-content: center; gap: 10px 16px; }
   .bj-seats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .bj-table { border-radius: 36px; min-height: 0; }
@@ -1417,9 +1424,9 @@ button.chat-name:hover { text-decoration: underline; }
   .topbar .container-xl { justify-content: center; }
   .logo-sm, .username { display: none; }
   .user-box { gap: 6px; flex-wrap: wrap; justify-content: center; }
-  .ad-btn { padding: 0 10px 0 8px; }
-  .ad-modal .modal-body { padding: 10px 14px 18px; }
-  .ad-actions .btn { flex: 1 1 100%; }
+  .rw-btn { padding: 0 10px 0 8px; }
+  .rw-modal .modal-body { padding: 10px 14px 18px; }
+  .rw-actions .btn { flex: 1 1 100%; }
   .tabs .nav-link { padding: 7px 14px; }
   .auth-card { padding: 32px 20px 24px; }
   .bj-seats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
