@@ -506,7 +506,7 @@ window.BlackjackUI = (() => {
     ctx = appCtx;
 
     ctx.renderChips($('#bj-chips'), (v) => {
-      pendingBet = Math.min(state?.limits.max ?? 500, pendingBet + v);
+      pendingBet = Math.min(state?.limits.max ?? 10_000, pendingBet + v);
       renderPending();
     });
     $('#bj-bet-clear').addEventListener('click', () => { pendingBet = 0; renderPending(); });
