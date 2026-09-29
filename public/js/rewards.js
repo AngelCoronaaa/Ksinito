@@ -160,6 +160,18 @@ window.RewardsUI = (() => {
       el.alt = ad.title;
       el.decoding = 'async';
     }
+    // Con enlace, pulsar la imagen o el vídeo abre el sitio del anunciante en otra pestaña
+    // (como "Ver más"). El contador del servidor sigue corriendo.
+    if (ad.link) {
+      const a = document.createElement('a');
+      a.className = 'rw-media-link';
+      a.href = ad.link;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.setAttribute('aria-label', `${ad.title} (se abre en otra pestaña)`);
+      a.append(el);
+      el = a;
+    }
     box.replaceChildren(el);
     $('#rw-title-text').textContent = ad.title;
     const link = $('#rw-link');

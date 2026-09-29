@@ -12,6 +12,7 @@
     "type": "image",
     "src": "/spots/colxsoft-01.jpg",
     "title": "ColxSoft — diseño y desarrollo web de alta gama",
+    "link": "https://colxsoft.com",
     "active": true,
     "weight": 1
   },
@@ -20,6 +21,7 @@
     "type": "image",
     "src": "/spots/stardest-01.jpg",
     "title": "Stardest — despliegues en la nube sin límites",
+    "link": "https://stardest.com",
     "active": true,
     "weight": 1
   }

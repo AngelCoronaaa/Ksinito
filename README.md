@@ -148,7 +148,8 @@ Al arrancar, la app espera hasta ~1 minuto a que MySQL responda. `GET /api/healt
 
    - `id`: único, de 1 a 64 letras, números, `.`, `_` o `-`.
    - `type`: `video` o `image`. `src`: un archivo que exista directamente en `public/spots/`.
-   - `link` (opcional): `https://`. Aparece el botón *Ver más*, que abre en otra pestaña.
+   - `link` (opcional): `https://`. La imagen o el vídeo se vuelven clicables y aparece el botón
+     *Ver más*; los dos abren el enlace en otra pestaña.
    - `active: false` lo retira sin borrarlo. `weight` (entero de 1 a 1000): los de más peso
      salen más a menudo.
 
