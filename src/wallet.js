@@ -1,9 +1,10 @@
 'use strict';
 
-// Único módulo que modifica créditos. No hay ningún endpoint ni evento de
-// socket que permita al cliente sumarse créditos: solo el bono de bienvenida
-// (una vez por cuenta), los pagos que calculan los juegos en el servidor y las
-// transferencias entre jugadores (que solo mueven créditos, nunca los crean).
+// Único módulo que modifica créditos. El cliente no puede sumarse créditos:
+// solo entran por el bono de bienvenida (una vez por cuenta), los pagos que
+// calculan los juegos en el servidor y la recompensa por anuncio (ads.js, que el
+// servidor valida por tiempo y token de un solo uso). Las transferencias entre
+// jugadores solo mueven créditos, nunca los crean.
 
 const { EventEmitter } = require('node:events');
 const { one, transaction } = require('./db');
@@ -34,14 +35,22 @@ async function getBalance(userId) {
 /**
  * Aplica un cambio de saldo + asiento contable de forma atómica.
  * El UPDATE bloquea la fila hasta el COMMIT, así que el saldo leído después es el nuestro.
+ * Con `tx` se hace dentro de esa transacción (de otro módulo) y el saldo se anuncia
+ * solo cuando esta se confirma; si no, en una transacción propia.
  */
-async function apply(userId, delta, reason, sql, params) {
-  const balance = await transaction(async (tx) => {
+async function apply(userId, delta, reason, sql, params, tx = null) {
+  const run = async (tx) => {
     if ((await tx.query(sql, params)).affectedRows === 0) return null;
     const after = Number((await tx.one(SQL.balance, [userId])).credits);
     await tx.query(SQL.ledger, [userId, delta, after, reason, Date.now()]);
     return after;
-  });
+  };
+  if (tx) {
+    const balance = await run(tx);
+    if (balance !== null) tx.onCommit(() => events.emit('balance', userId, balance));
+    return balance;
+  }
+  const balance = await transaction(run);
   if (balance !== null) events.emit('balance', userId, balance);
   return balance;
 }
@@ -52,10 +61,13 @@ function debit(userId, amount, reason) {
   return apply(userId, -amount, reason, SQL.debit, [amount, userId, amount]);
 }
 
-/** Suma créditos (solo lo llaman los juegos al pagar o reembolsar). */
-function credit(userId, amount, reason) {
+/**
+ * Suma créditos (lo llaman los juegos al pagar o reembolsar, y ads.js al recompensar).
+ * `tx` (opcional): transacción de db.transaction() en la que hacerlo.
+ */
+function credit(userId, amount, reason, tx = null) {
   assertAmount(amount);
-  return apply(userId, amount, reason, SQL.credit, [amount, userId]);
+  return apply(userId, amount, reason, SQL.credit, [amount, userId], tx);
 }
 
 /** Da los 100 créditos de bienvenida. Solo tiene efecto la primera vez. */

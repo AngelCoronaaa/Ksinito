@@ -973,11 +973,26 @@ button.chip:hover { transform: translateY(-3px) rotate(-10deg); }
 .bj-shoe .pcard { --w: 40px; }
 .bj-shoe .pcard + .pcard { margin-left: -36px; }
 
-.bj-controls { display: grid; justify-items: center; gap: 14px; margin-top: 22px; padding: 20px; }
+.bj-controls { display: grid; justify-items: center; gap: 14px; margin-top: 22px; padding: 16px 20px; }
+/* Sin pista ni apuesta ni acciones no queda nada que mostrar: la barra fija no debe ocupar sitio vacía. */
+.bj-controls:not(:has(.hint:not(:empty), .bj-bet:not(.hidden), .bj-actions:not(.hidden))) { display: none; }
 .hint { margin: 0; color: var(--muted); text-align: center; }
 .hint:empty { display: none; }
 .bj-bet, .bj-actions { display: flex; gap: 12px; align-items: center; justify-content: center; flex-wrap: wrap; animation: fadeUp .35s var(--ease-out); }
 .bj-actions .btn { min-width: 128px; padding: 10px 18px; }
+#bj-bet-place { padding-inline: 1.5rem; }
+.bj-extras { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 14px; }
+.bj-extras:not(:has(> :not(.hidden))) { display: none; }
+
+/* Barras de apuesta ancladas abajo de la pantalla (fichas siempre a mano sin hacer scroll).
+   Fondo casi opaco en vez de backdrop-filter, que solo se permite en la barra superior. */
+.dock {
+  position: sticky;
+  bottom: 12px;
+  z-index: 20;
+  background: linear-gradient(180deg, rgba(20, 40, 31, .97), rgba(10, 22, 17, .97));
+  box-shadow: 0 -6px 26px rgba(0, 0, 0, .4), 0 18px 40px rgba(0, 0, 0, .32), inset 0 1px 0 rgba(255, 255, 255, .05);
+}
 
 /* ---------- avisos y celebraciones ---------- */
 .toast-container { z-index: 1090; }
@@ -1330,6 +1345,41 @@ button.chat-name:hover { text-decoration: underline; }
 @keyframes msgIn { from { opacity: 0; transform: translateY(8px); } }
 @keyframes fabPing { 40% { transform: scale(1.15); } }
 
+/* ---------- anuncios con recompensa ---------- */
+/* El envoltorio recibe el ratón y el foco cuando el botón está desactivado (para el aviso). */
+.ad-wrap { display: inline-flex; border-radius: 999px; }
+.ad-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 14px 0 10px;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  --bs-btn-hover-color: var(--gold-bright);
+  --bs-btn-disabled-color: var(--muted);
+}
+.ad-btn .bi { font-size: 1.15rem; }
+.ad-modal .modal-body { padding: 12px 24px 24px; }
+.ad-stage { position: relative; }
+.ad-media {
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid var(--panel-border);
+  background: #000;
+}
+.ad-media video, .ad-media img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.ad-media.is-image { aspect-ratio: auto; }
+.ad-media.is-image img { height: auto; max-height: 60vh; }
+.ad-sound { position: absolute; right: 10px; bottom: 10px; background-color: rgba(0, 0, 0, .55); }
+.ad-caption { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 12px 0 4px; }
+.ad-title { font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+.ad-caption .btn { flex-shrink: 0; }
+.ad-status { color: var(--muted); font-size: .9rem; }
+.ad-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 8px; }
+.ad-actions .btn { padding-left: 22px; padding-right: 22px; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: .01ms !important;
@@ -1343,6 +1393,21 @@ button.chat-name:hover { text-decoration: underline; }
 
 /* ---------- responsive ---------- */
 @media (max-width: 991.98px) {
+  /* Ruleta en una columna: historial arriba, paño, y las fichas en una barra fija abajo. */
+  .rl-side > .rl-history { order: -1; }
+  .dock-sm {
+    order: 1;
+    position: sticky;
+    bottom: 8px;
+    z-index: 20;
+    background: linear-gradient(180deg, rgba(20, 40, 31, .97), rgba(10, 22, 17, .97));
+    box-shadow: 0 -6px 26px rgba(0, 0, 0, .4), 0 18px 40px rgba(0, 0, 0, .32), inset 0 1px 0 rgba(255, 255, 255, .05);
+  }
+  .dock { bottom: 8px; }
+  /* Hueco a la derecha para el botón flotante del chat, que queda encima de la barra. */
+  .dock, .dock-sm { padding: 10px 84px 10px 14px; }
+  .bj-controls { gap: 10px; margin-top: 16px; }
+  .bet-controls { justify-content: center; gap: 10px 16px; }
   .bj-seats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .bj-table { border-radius: 36px; min-height: 0; }
   .bj-tables { display: flex; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
@@ -1351,6 +1416,10 @@ button.chat-name:hover { text-decoration: underline; }
 @media (max-width: 575.98px) {
   .topbar .container-xl { justify-content: center; }
   .logo-sm, .username { display: none; }
+  .user-box { gap: 6px; flex-wrap: wrap; justify-content: center; }
+  .ad-btn { padding: 0 10px 0 8px; }
+  .ad-modal .modal-body { padding: 10px 14px 18px; }
+  .ad-actions .btn { flex: 1 1 100%; }
   .tabs .nav-link { padding: 7px 14px; }
   .auth-card { padding: 32px 20px 24px; }
   .bj-seats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -1359,10 +1428,184 @@ button.chat-name:hover { text-decoration: underline; }
   .bj-table { padding: 20px 10px 28px; border-width: 10px; border-radius: 28px; }
   .bj-shoe { top: 10px; right: 10px; transform: rotate(-8deg) scale(.75); transform-origin: top right; }
   .dealer-cards .pcard { --w: 56px; }
-  .bj-actions .btn { min-width: 0; flex: 1 1 40%; }
-  .bet-controls { justify-content: center; }
-  .chip { width: 46px; height: 46px; }
+  .bj-actions .btn { min-width: 0; flex: 1 1 40%; padding: 8px 10px; }
+  /* Ruleta más compacta para llegar antes al paño. */
+  .wheel-panel { gap: 12px; padding: 16px 14px; }
+  .wheel-wrap { width: min(250px, 72vw); }
+  .history-strip { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 2px; }
+  .hnum { flex-shrink: 0; }
+  /* Barras de apuesta en móvil: fichas en una fila y controles compactos debajo. */
+  .dock, .dock-sm { padding: 8px 66px 8px 10px; }
+  .chips { gap: 6px; }
+  .chip { width: 40px; height: 40px; font-size: .78rem; }
+  .chip::before { inset: 5px; }
+  .chip.selected { transform: translateY(-4px); }
+  .bet-controls .chips, .bj-bet .chips { flex-basis: 100%; justify-content: center; }
+  .bet-controls, .bj-bet { gap: 8px 10px; }
+  .bet-controls .btn, .bj-bet .btn { padding: 5px 10px; font-size: .85rem; }
+  .bet-summary { font-size: .8rem; }
+  .bet-summary strong { font-size: 1.05rem; }
+  #bj-bet-place { padding-inline: 14px; }
+  .hint { font-size: .8rem; }
   .chat-dock { right: 12px; bottom: 12px; }
   .chat-panel { height: calc(100vh - 110px); }
   .chat-fab { width: 52px; height: 52px; }
+}
+
+/* ---------- patos ---------- */
+/* Área de juego 16:9 que cabe en la pantalla con su marcador debajo (letterbox). */
+.dk-stage {
+  --dk-reserved: 215px; /* barra superior, márgenes y marcador */
+  --dk-w: min(100%, max(320px, calc((100vh - var(--dk-reserved)) * 16 / 9)));
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+}
+@supports (height: 100svh) {
+  .dk-stage { --dk-w: min(100%, max(320px, calc((100svh - var(--dk-reserved)) * 16 / 9))); }
+}
+.dk-frame {
+  position: relative;
+  width: var(--dk-w);
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: #1b2350;
+  border: 1px solid var(--panel-border);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, .32);
+  container-type: inline-size;
+}
+#dk-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none; /* sin zoom ni scroll al tocar */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.dk-frame.aiming #dk-canvas { cursor: none; } /* la mira se dibuja en el canvas */
+
+.dk-banner {
+  position: absolute;
+  top: 16%;
+  left: 50%;
+  padding: 4px 18px;
+  border-radius: 999px;
+  background: rgba(10, 8, 24, .55);
+  color: var(--gold-bright);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.1rem;
+  font-size: clamp(.9rem, 3.4cqw, 1.6rem);
+  letter-spacing: .06em;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -8px);
+  transition: opacity .25s, transform .25s var(--ease-out);
+}
+.dk-banner.show { opacity: 1; transform: translate(-50%, 0); }
+
+.dk-card {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  gap: clamp(4px, 1.4cqw, 12px);
+  padding: 12px 16px;
+  text-align: center;
+  background: radial-gradient(ellipse at center, rgba(8, 10, 26, .78), rgba(8, 10, 26, .45) 80%);
+  animation: fadeIn .3s;
+}
+.dk-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--gold-bright);
+  font-size: 1.3rem;
+  font-size: clamp(1.05rem, 4.2cqw, 2rem);
+  letter-spacing: .06em;
+}
+.dk-text, .dk-quota { margin: 0; max-width: 34em; font-size: .85rem; font-size: clamp(.74rem, 1.9cqw, .98rem); }
+.dk-quota { color: var(--muted); }
+.dk-quota:empty { display: none; }
+.dk-card .btn { margin-top: 4px; padding: 6px 22px; }
+
+.dk-hud {
+  width: var(--dk-w);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 6px 10px 6px 14px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(18, 36, 28, .78), rgba(10, 22, 17, .78));
+  border: 1px solid var(--panel-border);
+}
+.dk-hud-group { display: flex; align-items: center; gap: 10px; }
+.dk-wave { font-weight: 700; font-size: .85rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dk-ammo { display: inline-flex; gap: 4px; }
+.dk-bullet {
+  width: 8px;
+  height: 18px;
+  border-radius: 4px 4px 2px 2px;
+  background: linear-gradient(180deg, var(--gold-bright) 0 38%, var(--gold-deep) 38% 100%);
+  transition: opacity .2s, transform .2s;
+}
+.dk-bullet.spent { opacity: .18; transform: translateY(2px); }
+.dk-tally { display: flex; gap: 5px; }
+.dk-slot {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, .25);
+  transition: background-color .2s, border-color .2s;
+}
+.dk-slot.hit { background: var(--gold); border-color: var(--gold-bright); }
+.dk-slot.escaped { border-color: rgba(255, 107, 94, .6); }
+.dk-slot.escaped::before {
+  content: '';
+  position: absolute;
+  top: calc(50% - 1px);
+  left: -1px;
+  right: -1px;
+  height: 2px;
+  background: rgba(255, 107, 94, .8);
+  transform: rotate(-45deg);
+}
+/* La oleada en juego late (opacidad de una capa, no box-shadow). */
+.dk-slot.current::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid var(--gold);
+  animation: glowFade .8s ease-in-out infinite alternate;
+  opacity: 0;
+}
+.dk-earned { display: inline-flex; align-items: center; gap: 5px; font-weight: 800; color: var(--gold); font-variant-numeric: tabular-nums; }
+.dk-tool { width: 34px; height: 34px; font-size: .95rem; }
+
+/* Pantalla completa: el área de juego ocupa todo lo que deja el marcador. */
+.dk-stage:fullscreen {
+  --dk-w: min(100%, calc((100vh - 70px) * 16 / 9));
+  align-content: center;
+  padding: 8px;
+  background: #05080a;
+}
+
+@media (max-height: 500px) and (orientation: landscape) {
+  .dk-stage { --dk-reserved: 150px; }
+}
+@media (max-width: 575.98px) {
+  .dk-hud { border-radius: 18px; padding: 6px 8px; }
+  .dk-tally { order: 3; flex-basis: 100%; justify-content: center; }
+  .dk-slot { width: 12px; height: 12px; }
 }

@@ -1,11 +1,12 @@
 # Ksinito
 
-Casino online con **Ruleta** y **Blackjack** multijugador en tiempo real, con créditos ficticios.
+Casino online con **Ruleta** y **Blackjack** multijugador en tiempo real, con créditos ficticios,
+y un minijuego gratis de **Patos** para ganar créditos.
 
 ## Base de datos: MySQL
 
-Todo (cuentas, créditos, registro de movimientos, fotos, chat, transferencias, historial de la
-ruleta y el secreto de las sesiones) se guarda en **MySQL 8.0+** o un servicio compatible.
+Todo (cuentas, créditos, registro de movimientos, fotos, chat, transferencias, anuncios vistos,
+historial de la ruleta y el secreto de las sesiones) se guarda en **MySQL 8.0+** o un servicio compatible.
 El esquema está en [`db/schema.sql`](db/schema.sql): la app lo aplica sola al arrancar (todas
 las sentencias son `CREATE TABLE IF NOT EXISTS`), y también puedes pegarlo en la consola SQL de
 tu proveedor antes del primer deploy. No usa claves foráneas, así que funciona también en
@@ -35,6 +36,20 @@ npm run dev            # http://localhost:3000 (npm start en producción)
 | `CLIENT_IP_HEADER`   | Cabecera con la IP real del jugador (por defecto `cf-connecting-ip`, de Cloudflare). Vacía si no usas Cloudflare, porque se podría falsear |
 | `RTC_ICE_SERVERS`    | Servidores STUN/TURN para las cámaras, en JSON (por defecto el STUN público de Google). Ver "Cámaras" |
 | `TRUST_PROXY`        | Si está detrás de un proxy (nginx, Traefik…) para leer la IP real                 |
+| `ADS_ENABLED`        | `0` oculta el botón de anuncios y hace que sus rutas respondan 404 (por defecto `1`) |
+| `AD_REWARD`          | Créditos por anuncio completado (por defecto `100`)                               |
+| `AD_DURATION_SECONDS` | Segundos mínimos de anuncio antes de poder reclamar (por defecto `30`)           |
+| `AD_COOLDOWN_SECONDS` | Segundos mínimos entre dos anuncios del mismo jugador (por defecto `300`)        |
+| `AD_DAILY_LIMIT`     | Máximo de anuncios **cobrados** por jugador en 24 h (por defecto `10`; `0` = ninguno) |
+| `AD_CLAIM_WINDOW_SECONDS` | Segundos para reclamar una vez terminado el anuncio (por defecto `300`)     |
+| `DUCKS_ENABLED`      | `0` oculta el juego de patos y rechaza sus eventos (por defecto `1`)              |
+| `DUCK_REWARD`        | Créditos por pato derribado (por defecto `2`)                                     |
+| `DUCKS_PER_ROUND`    | Patos por ronda, de 1 a 50 (por defecto `10`)                                     |
+| `DUCKS_DAILY_CREDIT_LIMIT` | Máximo de créditos ganados con patos en 24 h (por defecto `100`; `0` = no se pueden ganar) |
+| `DUCKS_ROUND_COOLDOWN_SECONDS` | Espera mínima entre el fin de una ronda y la siguiente (por defecto `10`) |
+
+Las variables numéricas se validan al arrancar: si una no es un entero válido, se usa el valor
+por defecto y se avisa en la consola.
 
 Al arrancar, la app espera hasta ~1 minuto a que MySQL responda. `GET /api/health` devuelve
 `{"ok":true,"database":"mysql ok"}` si llega a la base.
@@ -89,8 +104,89 @@ Al arrancar, la app espera hasta ~1 minuto a que MySQL responda. `GET /api/healt
 - **No se pueden dar créditos desde la consola del navegador**: el cliente solo envía
   intenciones ("apuesto 10 al rojo", "pido carta"). El servidor valida cada apuesta
   (entero, límites, fase del juego, turno, saldo), baraja, reparte, gira la ruleta con
-  `crypto.randomInt` y calcula los pagos. No existe ningún endpoint ni evento que sume
-  créditos. La carta tapada del crupier nunca se envía al cliente hasta que se revela.
+  `crypto.randomInt` y calcula los pagos. Las únicas formas de sumar créditos sin apostar son
+  los anuncios con recompensa y el juego de patos (abajo), y en los dos el servidor decide por
+  su cuenta si se ganaron. La carta tapada del crupier nunca se envía al cliente hasta que se
+  revela.
+
+## Anuncios con recompensa
+
+- El botón **▶ +100** (arriba, junto a tus créditos) abre un anuncio. Al terminar la cuenta
+  atrás se puede reclamar la recompensa (`AD_REWARD`, 100 créditos por defecto). Se abona con
+  `wallet.js` y queda en `ledger` con el motivo `ad_reward:<id>`.
+- **Límites:** un anuncio cada `AD_COOLDOWN_SECONDS` (5 min) y como máximo `AD_DAILY_LIMIT`
+  (10) cobrados en 24 h. El botón muestra la espera (mm:ss) o "Vuelve mañana".
+- **El servidor valida el tiempo por su cuenta.** Al empezar, crea un token aleatorio de un
+  solo uso con `ready_at = NOW() + AD_DURATION_SECONDS` en MySQL. Solo lo paga si es de ese
+  jugador, no se ha cobrado y `NOW()` de MySQL está entre `ready_at` y `expires_at`
+  (`ready_at + AD_CLAIM_WINDOW_SECONDS`). El cobro es un `UPDATE` condicional en la misma
+  transacción que el abono, así que dos peticiones a la vez con el mismo token pagan una sola
+  vez. El contador del navegador (que se pausa si cambias de pestaña) es solo informativo.
+- Recargar la página o cancelar no da un anuncio nuevo: el botón retoma el pendiente con el
+  mismo token.
+- Cada anuncio empezado queda en la tabla `ad_rewards` con su `ad_id`, para saber cuántas veces
+  se vio cada uno.
+
+### Añadir un anuncio
+
+1. Copia el archivo en `public/ads/`: vídeo MP4 o WebM, o imagen WebP o JPEG (mejor 16:9). Si
+   cambias un anuncio, usa un nombre de archivo nuevo: Cloudflare y los navegadores guardan en
+   caché el anterior.
+2. Añádelo a `src/ads.config.json` (no es público) y reinicia la app:
+
+   ```json
+   {
+     "id": "colxsoft-01",
+     "type": "video",
+     "src": "/ads/colxsoft-01.mp4",
+     "title": "ColxSoft — desarrollo web a la medida",
+     "link": "https://ejemplo.com",
+     "active": true,
+     "weight": 1
+   }
+   ```
+
+   - `id`: único, de 1 a 64 letras, números, `.`, `_` o `-`.
+   - `type`: `video` o `image`. `src`: un archivo que exista directamente en `public/ads/`.
+   - `link` (opcional): `https://`. Aparece el botón *Ver más*, que abre en otra pestaña.
+   - `active: false` lo retira sin borrarlo. `weight` (entero de 1 a 1000): los de más peso
+     salen más a menudo.
+
+   Al arrancar se valida cada entrada; las que no son válidas se descartan con un aviso en la
+   consola. Si no queda ningún anuncio activo, el botón no aparece.
+- Solo anuncios propios, servidos desde el mismo dominio: no se carga nada de redes
+  publicitarias. La elección del anuncio está en `pickAd()` (`src/ads.js`), para poder
+  cambiarla por un proveedor externo sin tocar la lógica de recompensa.
+
+## Patos
+
+Minijuego individual para ganar créditos cuando te quedas sin saldo: **jugar es gratis** y cada
+pato derribado da **2 créditos** (`DUCK_REWARD`). No es un juego de apuestas.
+
+- **Reglas:** una ronda son 10 patos (`DUCKS_PER_ROUND`) que salen de 2 en 2, en 5 oleadas.
+  Cada pato está en pantalla como máximo 5 s; si no le das, escapa volando hacia arriba. Tienes
+  **3 disparos por oleada**: sin balas, los patos que quedan escapan. La velocidad sube un poco en
+  cada oleada. Al terminar ves cuántos derribaste y cuánto ganaste (máximo 20 créditos por ronda
+  con los valores por defecto).
+- **Recompensa:** los créditos se suman **una sola vez, al cerrar la ronda**, en una
+  transacción que la marca como cobrada (`duck_rounds.credited_at`) y los abona con `wallet.js`
+  (motivo `duck_reward:<id>` en `ledger`). Si te desconectas a mitad de ronda, se cierra y se
+  paga lo ganado a los 30 s (o al terminar sus oleadas); recargar la página recupera la ronda.
+- **Tope diario:** como máximo `DUCKS_DAILY_CREDIT_LIMIT` (100) créditos con patos en 24 h. La
+  ronda que lo alcanza cobra solo lo que falta, y después el botón muestra "Vuelve en hh:mm".
+  Entre rondas hay que esperar `DUCKS_ROUND_COOLDOWN_SECONDS` (10 s). Solo una ronda a la vez.
+- **El servidor decide todo.** Genera los patos con `crypto` a partir de una semilla por
+  ronda, los envía uno a uno cuando aparecen y calcula si cada disparo acierta con la misma
+  función de trayectoria que dibuja el navegador (`public/js/duck-path.js`). El navegador solo
+  envía "disparé en (x, y) en el instante t". Un disparo no cuenta si `t` se aleja más de
+  500 ms del reloj del servidor, si llega antes de 250 ms desde que apareció el pato o después
+  de que escape, o si ya no quedan balas. Hay un límite de 10 disparos por segundo.
+- Con ratón aparece una mira; en móvil se toca donde está el pato (mejor en horizontal; hay
+  botón de pantalla completa). Si cambias de pestaña se muestra "Pausado", pero la ronda sigue
+  en el servidor.
+- Dibujos (patos, atardecer con lago y juncos) hechos en canvas y sonidos generados con Web
+  Audio API: sin imágenes ni audios externos. Botón para silenciar.
+- `npm test` ejecuta las pruebas de la trayectoria y de la validación de disparos (`test/`).
 
 ## Ruleta
 
@@ -151,12 +247,20 @@ src/
   avatars.js    Fotos de perfil: validación y almacenamiento
   profile.js    Rutas para subir, quitar y servir la foto
   transfers.js  Envío de créditos entre jugadores por ID
+  ads.js        Anuncios con recompensa: catálogo, límites, token de un solo uso y rutas
+  ads.config.json  Catálogo de anuncios (archivos en public/ads/)
   chat.js       Chat de la ruleta y de cada mesa (el servidor también reenvía la
                 señalización WebRTC de las cámaras, en server.js)
   wallet.js     Único módulo que modifica créditos
   roulette.js   Lógica de la ruleta
   blackjack.js  Lógica de las mesas de blackjack
+  ducks.js      Juego de patos: rondas, patos, validación de disparos, tope diario y pago
+  env.js        Lectura y validación de variables de entorno numéricas
 public/         Cliente: Bootstrap 5 + Bootstrap Icons, JS sin frameworks y sin build.
                 Bootstrap, iconos, fuentes (Inter, Cinzel) y canvas-confetti se sirven
                 desde node_modules en /vendor (mismo origen, sin CDN).
+  ads/          Vídeos e imágenes de los anuncios con recompensa
+  js/ducks.js   Juego de patos en el navegador (canvas, sonidos, marcador)
+  js/duck-path.js  Trayectoria de los patos (módulo ESM que usan el navegador y el servidor)
+test/           Pruebas (npm test, con node:test)
 ```

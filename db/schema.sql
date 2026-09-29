@@ -97,3 +97,46 @@ CREATE TABLE IF NOT EXISTS settings (
   value VARCHAR(255) NOT NULL,
   PRIMARY KEY (name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Anuncios con recompensa (src/ads.js). Cada fila es un anuncio empezado; `token` es de un
+-- solo uso y `claimed_at` se rellena al cobrarlo. A diferencia del resto, las fechas son
+-- DATETIME porque todas las comprobaciones de tiempo se hacen con NOW() de MySQL (ni el reloj
+-- del navegador ni el de Node cuentan). `ad_id` permite contar cuántas veces se vio cada anuncio.
+CREATE TABLE IF NOT EXISTS ad_rewards (
+  id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id    BIGINT UNSIGNED NOT NULL,
+  ad_id      VARCHAR(64)     NOT NULL,
+  token      CHAR(32)        CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  reward     INT             NOT NULL,
+  created_at DATETIME        NOT NULL,
+  ready_at   DATETIME        NOT NULL,
+  expires_at DATETIME        NOT NULL,
+  claimed_at DATETIME        NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_token (token),
+  KEY idx_user_created (user_id, created_at),
+  KEY idx_user_claimed (user_id, claimed_at),
+  KEY idx_ad (ad_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Rondas del minijuego "Patos" (src/ducks.js). La ronda en juego vive en memoria; esta tabla
+-- guarda el historial y sirve para el cooldown entre rondas y el tope diario de créditos
+-- (SUM(reward) de las rondas cobradas en las últimas 24 h). `credited_at` se rellena al pagar la
+-- ronda con un UPDATE condicional, así que cada ronda se paga una sola vez. Como en ad_rewards,
+-- las fechas son DATETIME porque los límites se comparan con NOW() de MySQL. `seed` permite
+-- reconstruir los patos de la ronda.
+CREATE TABLE IF NOT EXISTS duck_rounds (
+  id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id     BIGINT UNSIGNED NOT NULL,
+  seed        CHAR(32)        CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  started_at  DATETIME        NOT NULL,
+  ended_at    DATETIME        NULL,
+  ducks_total INT             NOT NULL,
+  ducks_hit   INT             NOT NULL DEFAULT 0,
+  shots       INT             NOT NULL DEFAULT 0,
+  reward      INT             NOT NULL DEFAULT 0,
+  credited_at DATETIME        NULL,
+  PRIMARY KEY (id),
+  KEY idx_user_started (user_id, started_at),
+  KEY idx_user_credited (user_id, credited_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

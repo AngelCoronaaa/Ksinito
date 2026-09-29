@@ -101,18 +101,28 @@ async function one(sql, params = []) {
 
 /**
  * Ejecuta fn(tx) dentro de una transacción; hace ROLLBACK si lanza.
- * `tx` tiene los mismos query/one pero sobre la conexión de la transacción.
+ * `tx` tiene los mismos query/one pero sobre la conexión de la transacción, y
+ * `tx.onCommit(cb)` para avisar de algo solo si la transacción llega a confirmarse.
  */
 async function transaction(fn) {
   const conn = await requirePool().getConnection();
+  const committed = [];
   const tx = {
     query: async (sql, params = []) => (await conn.query(sql, params))[0],
     one: async (sql, params = []) => (await conn.query(sql, params))[0][0] ?? null,
+    onCommit: (cb) => committed.push(cb),
   };
   try {
     await conn.beginTransaction();
     const result = await fn(tx);
     await conn.commit();
+    for (const cb of committed) {
+      try {
+        cb();
+      } catch (err) {
+        console.error('[db] Tras confirmar la transacción', err); // ya está guardada: no se deshace
+      }
+    }
     return result;
   } catch (err) {
     await conn.rollback().catch(() => {});

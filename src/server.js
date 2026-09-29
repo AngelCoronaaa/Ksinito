@@ -9,6 +9,8 @@ const { Server } = require('socket.io');
 const auth = require('./auth');
 const profile = require('./profile');
 const transfers = require('./transfers');
+const ads = require('./ads');
+const ducks = require('./ducks');
 const chat = require('./chat');
 const db = require('./db');
 const { SerialQueue } = require('./queue');
@@ -60,6 +62,8 @@ app.get('/api/health', async (req, res) => {
 app.use('/api', auth.router);
 app.use('/api', profile.router);
 app.use('/api', transfers.router);
+app.use('/api', ads.router);
+app.use('/api', ducks.router);
 
 // CSS/JS con ?v=<versión> (ver ASSETS_VERSION abajo) se cachean un año: la URL cambia en
 // cada deploy. Sin versión: el código propio se revalida siempre y las librerías (fuentes e
@@ -88,6 +92,7 @@ app.use('/vendor/fonts/cinzel', vendor('@fontsource/cinzel'));
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const assetsHash = crypto.createHash('sha256').update(JSON.stringify(require('../package.json').dependencies));
 for (const file of fs.readdirSync(PUBLIC_DIR, { recursive: true }).sort()) {
+  if (file.split(path.sep)[0] === 'ads') continue; // los anuncios no van en index.html (y los vídeos pesan)
   const full = path.join(PUBLIC_DIR, file);
   if (fs.statSync(full).isFile()) assetsHash.update(file).update(fs.readFileSync(full));
 }
@@ -209,6 +214,9 @@ transfers.events.on('sent', ({ toUserId, amount, from }) => {
   io.to(`user:${toUserId}`).emit('transfer:received', { amount, from });
 });
 
+// Tras cobrar un anuncio, sus otras pestañas actualizan el botón (el saldo ya llega por 'balance').
+ads.events.on('claimed', ({ userId, reward }) => io.to(`user:${userId}`).emit('ads:claimed', { reward }));
+
 io.use(async (socket, next) => {
   try {
     const user = await auth.userFromCookieHeader(socket.handshake.headers.cookie);
@@ -231,6 +239,7 @@ const leaveTimers = new Map();
 io.on('connection', (socket) => {
   const user = socket.data.user;
   connections.set(user.id, (connections.get(user.id) ?? 0) + 1);
+  ducks.setOnline(user.id, true);
   clearTimeout(leaveTimers.get(user.id));
   leaveTimers.delete(user.id);
 
@@ -268,7 +277,7 @@ io.on('connection', (socket) => {
         reply({ ok: true });
       } catch (err) {
         if (!(err instanceof GameError)) console.error(`[${event}]`, err);
-        reply({ ok: false, error: err instanceof GameError ? err.message : 'Error interno' });
+        reply(err instanceof GameError ? { ok: false, error: err.message, ...err.extra } : { ok: false, error: 'Error interno' });
       }
     });
   };
@@ -325,6 +334,13 @@ io.on('connection', (socket) => {
   on('bj:bet', (p) => requireTable(user.id).placeBet(user, p.amount));
   on('bj:action', (p) => requireTable(user.id).act(user, p.action));
 
+  // Patos: el cliente solo dice dónde y cuándo disparó; los eventos de la ronda van a user:<id>.
+  on('ducks:start', () => ducks.start(user.id));
+  on('ducks:shot', (p) => ducks.shoot(user.id, p));
+  on('ducks:quit', (p) => ducks.quit(user.id, p.roundId));
+  // Recupera la ronda en juego (tras recargar o reconectar) sin empezar otra: null si no hay.
+  on('ducks:resume', () => socket.emit('ducks:round', ducks.resume(user.id)));
+
   socket.on('disconnect', () => {
     // Su cámara y micrófono (si los emitía) se apagan ya; el asiento se conserva unos segundos.
     for (const table of tables.values()) {
@@ -334,6 +350,7 @@ io.on('connection', (socket) => {
     const remaining = (connections.get(user.id) ?? 1) - 1;
     if (remaining > 0) return connections.set(user.id, remaining);
     connections.delete(user.id);
+    ducks.setOnline(user.id, false); // su ronda de patos se cierra si no vuelve en 30 s
     leaveTimers.set(
       user.id,
       setTimeout(() => {
@@ -351,6 +368,7 @@ async function main() {
   await auth.init();
   await avatars.init();
   roulette = await RouletteGame.create(io);
+  await ducks.init(io);
   server.listen(PORT, () => console.log(`Ksinito escuchando en http://localhost:${PORT}`));
 }
 

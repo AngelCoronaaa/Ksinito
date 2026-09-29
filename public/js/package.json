@@ -1,0 +1,4 @@
+{
+  "//": "Para Node: duck-path.js es un módulo ESM que también importa el servidor (src/ducks.js). El navegador no usa este archivo.",
+  "type": "module"
+}

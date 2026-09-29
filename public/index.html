@@ -66,12 +66,18 @@
         <nav class="tabs nav nav-pills">
           <button type="button" data-tab="roulette" class="nav-link active"><i class="bi bi-bullseye"></i><span>Ruleta</span></button>
           <button type="button" data-tab="blackjack" class="nav-link"><i class="bi bi-suit-club-fill"></i><span>Blackjack</span></button>
+          <button type="button" data-tab="ducks" class="nav-link hidden"><i class="bi bi-crosshair"></i><span>Patos</span></button>
         </nav>
         <div class="user-box">
           <div class="credits" title="Tus créditos">
             <i class="bi bi-coin"></i><span id="credits">0</span>
             <span id="credits-delta" class="credits-delta"></span>
           </div>
+          <span id="ad-wrap" class="ad-wrap hidden">
+            <button type="button" id="ad-open" class="btn btn-glass ad-btn" aria-label="Mira un anuncio y gana créditos">
+              <i class="bi bi-play-circle-fill" aria-hidden="true"></i><span id="ad-label">+100</span>
+            </button>
+          </span>
           <button type="button" id="transfer-open" class="btn btn-glass btn-icon" title="Enviar créditos" aria-label="Enviar créditos">
             <i class="bi bi-send-fill"></i>
           </button>
@@ -110,25 +116,26 @@
           </div>
 
           <div class="col-lg-7 col-xl-8">
-            <div class="d-grid gap-3">
-              <div class="glass-panel">
-                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
-                  <h3 class="panel-title"><i class="bi bi-clock-history me-1"></i>Últimos 30 giros</h3>
-                  <div id="rl-stats" class="rl-stats"></div>
-                </div>
-                <div id="rl-history" class="history-strip"></div>
+            <!-- En PC las fichas van encima del paño; en pantallas estrechas pasan a una barra fija abajo (orden en CSS). -->
+            <div class="d-grid gap-3 rl-side">
+              <div class="glass-panel bet-controls dock-sm">
+                <div id="rl-chips" class="chips"></div>
+                <div class="bet-summary">Apostado <strong id="rl-total">0</strong></div>
+                <button type="button" id="rl-clear" class="btn btn-glass">
+                  <i class="bi bi-arrow-counterclockwise me-1"></i>Quitar apuestas
+                </button>
               </div>
 
               <div class="board-scroll">
                 <div id="rl-board" class="board"></div>
               </div>
 
-              <div class="glass-panel bet-controls">
-                <div id="rl-chips" class="chips"></div>
-                <div class="bet-summary">Apostado <strong id="rl-total">0</strong></div>
-                <button type="button" id="rl-clear" class="btn btn-glass">
-                  <i class="bi bi-arrow-counterclockwise me-1"></i>Quitar apuestas
-                </button>
+              <div class="glass-panel rl-history">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                  <h3 class="panel-title"><i class="bi bi-clock-history me-1"></i>Últimos 30 giros</h3>
+                  <div id="rl-stats" class="rl-stats"></div>
+                </div>
+                <div id="rl-history" class="history-strip"></div>
               </div>
             </div>
           </div>
@@ -161,13 +168,14 @@
           <div id="bj-seats" class="bj-seats"></div>
         </div>
 
-        <div class="glass-panel bj-controls">
+        <!-- Barra fija abajo: con 15 asientos la mesa es muy alta y las fichas quedarían fuera de pantalla. -->
+        <div class="glass-panel bj-controls dock">
           <p id="bj-hint" class="hint"></p>
           <div id="bj-bet" class="bj-bet hidden">
             <div id="bj-chips" class="chips"></div>
             <div class="bet-summary">Apuesta <strong id="bj-pending">0</strong></div>
             <button type="button" id="bj-bet-clear" class="btn btn-glass"><i class="bi bi-x-lg me-1"></i>Borrar</button>
-            <button type="button" id="bj-bet-place" class="btn btn-gold px-4"><i class="bi bi-check2-circle me-1"></i>Apostar</button>
+            <button type="button" id="bj-bet-place" class="btn btn-gold"><i class="bi bi-check2-circle me-1"></i>Apostar</button>
           </div>
           <div id="bj-actions" class="bj-actions hidden">
             <button type="button" class="btn btn-gold" data-action="hit"><i class="bi bi-plus-lg me-1"></i>Pedir</button>
@@ -175,14 +183,52 @@
             <button type="button" class="btn btn-outline-gold" data-action="double"><i class="bi bi-chevron-double-up me-1"></i>Doblar</button>
             <button type="button" class="btn btn-outline-gold" data-action="split"><i class="bi bi-layout-split me-1"></i>Dividir</button>
           </div>
-          <div class="d-flex gap-2 flex-wrap justify-content-center">
-            <button type="button" id="bj-camera" class="btn btn-glass btn-sm hidden"><i class="bi bi-camera-video me-1"></i>Activar cámara</button>
-            <button type="button" id="bj-mic" class="btn btn-glass btn-sm hidden"><i class="bi bi-mic me-1"></i>Activar micrófono</button>
-            <button type="button" id="bj-sound" class="btn btn-glass btn-sm hidden"><i class="bi bi-volume-mute me-1"></i>Silenciar mesa</button>
-            <button type="button" id="bj-leave" class="btn btn-glass btn-sm hidden"><i class="bi bi-box-arrow-left me-1"></i>Levantarse</button>
-          </div>
+        </div>
+        <div class="bj-extras">
+          <button type="button" id="bj-camera" class="btn btn-glass btn-sm hidden"><i class="bi bi-camera-video me-1"></i>Activar cámara</button>
+          <button type="button" id="bj-mic" class="btn btn-glass btn-sm hidden"><i class="bi bi-mic me-1"></i>Activar micrófono</button>
+          <button type="button" id="bj-sound" class="btn btn-glass btn-sm hidden"><i class="bi bi-volume-mute me-1"></i>Silenciar mesa</button>
+          <button type="button" id="bj-leave" class="btn btn-glass btn-sm hidden"><i class="bi bi-box-arrow-left me-1"></i>Levantarse</button>
         </div>
         <p class="rules">5 mesas de 15 jugadores · 8 barajas · El crupier se planta en 17 · Blackjack paga 3:2 · Doblar con 2 cartas · Dividir una vez</p>
+      </section>
+
+      <!-- Patos: minijuego individual y gratis; cada pato derribado da créditos -->
+      <section id="ducks" class="game hidden">
+        <div id="dk-stage" class="dk-stage">
+          <div id="dk-frame" class="dk-frame">
+            <canvas id="dk-canvas" aria-label="Campo de tiro: pulsa sobre los patos para dispararles"></canvas>
+            <div id="dk-banner" class="dk-banner" aria-hidden="true"></div>
+            <div id="dk-card" class="dk-card">
+              <h2 id="dk-card-title" class="dk-title">Patos</h2>
+              <p id="dk-card-text" class="dk-text" aria-live="polite"></p>
+              <p id="dk-quota" class="dk-quota" aria-live="polite"></p>
+              <button type="button" id="dk-play" class="btn btn-gold" disabled>
+                <i class="bi bi-crosshair me-1" aria-hidden="true"></i><span id="dk-play-label">Jugar</span>
+              </button>
+            </div>
+          </div>
+          <div class="dk-hud">
+            <div class="dk-hud-group">
+              <span id="dk-wave" class="dk-wave">Oleada –</span>
+              <span id="dk-ammo" class="dk-ammo" role="img" aria-label="Balas"></span>
+            </div>
+            <div id="dk-tally" class="dk-tally" role="img" aria-label="Patos derribados"></div>
+            <div class="dk-hud-group">
+              <span class="dk-earned" title="Créditos ganados en esta ronda"><i class="bi bi-coin" aria-hidden="true"></i><span id="dk-earned">+0</span></span>
+              <button type="button" id="dk-mute" class="btn btn-glass btn-icon dk-tool" aria-label="Silenciar" aria-pressed="false">
+                <i class="bi bi-volume-up-fill"></i>
+              </button>
+              <button type="button" id="dk-full" class="btn btn-glass btn-icon dk-tool hidden" aria-label="Pantalla completa">
+                <i class="bi bi-arrows-fullscreen"></i>
+              </button>
+              <button type="button" id="dk-quit" class="btn btn-glass btn-icon dk-tool hidden" aria-label="Terminar la ronda" title="Terminar la ronda">
+                <i class="bi bi-flag-fill"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+        <p id="dk-rules" class="rules">Gratis · Patos que salen de 2 en 2 · 3 disparos por oleada · Créditos por cada pato derribado, con tope diario</p>
       </section>
     </main>
 
@@ -258,6 +304,48 @@
       </div>
     </div>
 
+    <div class="modal fade" id="ad-modal" tabindex="-1" aria-labelledby="ad-title" aria-hidden="true"
+         data-bs-backdrop="static" data-bs-keyboard="false">
+      <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content profile-modal ad-modal">
+          <div class="modal-header border-0 pb-0">
+            <h2 class="modal-title panel-title" id="ad-title"><i class="bi bi-play-circle me-1"></i>Anuncio patrocinado</h2>
+          </div>
+          <div class="modal-body">
+            <div class="ad-stage">
+              <div id="ad-media" class="ad-media"></div>
+              <button type="button" id="ad-sound" class="btn btn-glass btn-icon ad-sound hidden" aria-label="Activar sonido" aria-pressed="false">
+                <i class="bi bi-volume-mute-fill"></i>
+              </button>
+            </div>
+            <div class="ad-caption">
+              <span id="ad-title-text" class="ad-title"></span>
+              <a id="ad-link" class="btn btn-glass btn-sm hidden" target="_blank" rel="noopener noreferrer">
+                Ver más<i class="bi bi-box-arrow-up-right ms-1"></i>
+              </a>
+            </div>
+            <div class="phase-box">
+              <div class="d-flex justify-content-between align-items-baseline gap-2">
+                <span id="ad-hint" class="ad-status" aria-hidden="true"></span>
+                <span id="ad-status" class="visually-hidden" aria-live="polite"></span>
+                <span id="ad-timer" class="timer" aria-hidden="true"></span>
+              </div>
+              <div class="progress phase-progress" role="progressbar" aria-label="Tiempo del anuncio">
+                <div id="ad-progress" class="progress-bar"></div>
+              </div>
+            </div>
+            <p id="ad-error" class="error mb-0 mt-2" role="alert"></p>
+            <div class="ad-actions">
+              <button type="button" id="ad-claim" class="btn btn-gold" disabled>
+                <i class="bi bi-gift-fill me-1"></i><span id="ad-claim-label">Reclamar 100 créditos</span>
+              </button>
+              <button type="button" class="btn btn-glass" data-bs-dismiss="modal">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="modal fade" id="camera-modal" tabindex="-1" aria-labelledby="camera-title" aria-hidden="true">
       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content profile-modal">
@@ -314,7 +402,9 @@
   <script src="/js/blackjack.js"></script>
   <script src="/js/chat.js"></script>
   <script src="/js/transfer.js"></script>
+  <script src="/js/ads.js"></script>
   <script src="/js/media.js"></script>
+  <script src="/js/ducks.js"></script>
   <script src="/js/app.js"></script>
 </body>
 </html>

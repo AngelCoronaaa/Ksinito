@@ -80,6 +80,13 @@
     requestAnimationFrame(step);
   }
 
+  /** Confeti desde las dos esquinas de abajo (nada si se prefiere menos movimiento). */
+  function confettiBurst(count = 90) {
+    if (!fireConfetti || reducedMotion.matches) return;
+    fireConfetti({ particleCount: count, spread: 70, angle: 60, origin: { x: 0.1, y: 0.75 }, colors: CONFETTI_COLORS });
+    fireConfetti({ particleCount: count, spread: 70, angle: 120, origin: { x: 0.9, y: 0.75 }, colors: CONFETTI_COLORS });
+  }
+
   function nextWin() {
     const el = $('#celebrate');
     const win = winQueue.shift();
@@ -108,9 +115,7 @@
     countUp(amount, win.amount);
 
     if (fireConfetti && !reducedMotion.matches && (win.net ?? win.amount) > 0) {
-      const count = win.big ? 170 : 90;
-      fireConfetti({ particleCount: count, spread: 70, angle: 60, origin: { x: 0.1, y: 0.75 }, colors: CONFETTI_COLORS });
-      fireConfetti({ particleCount: count, spread: 70, angle: 120, origin: { x: 0.9, y: 0.75 }, colors: CONFETTI_COLORS });
+      confettiBurst(win.big ? 170 : 90);
       if (win.big) {
         setTimeout(() => fireConfetti({ particleCount: 120, spread: 120, startVelocity: 45, origin: { y: 0.45 }, colors: CONFETTI_COLORS }), 250);
       }
@@ -230,7 +235,12 @@
       credentials: 'same-origin',
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || 'Error de conexión');
+    if (!res.ok) {
+      const err = new Error(data.error || 'Error de conexión');
+      err.status = res.status; // p. ej. 425 al reclamar un anuncio antes de tiempo
+      err.data = data;
+      throw err;
+    }
     return data;
   }
 
@@ -378,9 +388,11 @@
           g.classList.add('game-enter');
         }
       });
-      if (btn.dataset.tab === 'roulette') {
-        window.RouletteUI.resize();
-        window.ChatUI.setChannel('roulette', 'Ruleta');
+      // El juego de patos solo dibuja mientras se ve (su ronda sigue en el servidor igualmente).
+      window.DucksUI.setActive(btn.dataset.tab === 'ducks');
+      if (btn.dataset.tab === 'roulette' || btn.dataset.tab === 'ducks') {
+        if (btn.dataset.tab === 'roulette') window.RouletteUI.resize();
+        window.ChatUI.setChannel('roulette', 'Ruleta'); // los patos no tienen chat propio
       } else {
         const { channel, label } = window.BlackjackUI.chatChannel();
         window.ChatUI.setChannel(channel, label);
@@ -422,6 +434,7 @@
 
     const ctx = {
       socket, emit, api, toast, celebrate, renderChips, avatar: avatarEl, reducedMotion, user,
+      confetti: confettiBurst,
       credits: () => credits,
       chat: window.ChatUI,
       transfer: window.TransferUI,
@@ -429,9 +442,11 @@
     };
     window.ChatUI.init(ctx);
     window.TransferUI.init(ctx);
+    window.AdsUI.init(ctx);
     window.MediaUI.init(ctx);
     window.RouletteUI.init(ctx);
     window.BlackjackUI.init(ctx);
+    window.DucksUI.init(ctx);
   }
 
   api('/api/me').then((data) => startApp(data.user)).catch(showAuth);
