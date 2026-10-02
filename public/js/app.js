@@ -260,9 +260,10 @@
     });
   }
 
-  function renderChips(container, onPick, selectable = false) {
+  /** Fichas para apostar; `min` oculta las de menos valor (p. ej. la trivia empieza en 10). */
+  function renderChips(container, onPick, selectable = false, min = 0) {
     container.innerHTML = '';
-    CHIP_VALUES.forEach((value, i) => {
+    CHIP_VALUES.filter((value) => value >= min).forEach((value, i) => {
       const chip = document.createElement('button');
       chip.type = 'button';
       chip.className = `chip chip-${value}`;
@@ -468,6 +469,7 @@
     window.RouletteUI.init(ctx);
     window.BlackjackUI.init(ctx);
     window.DucksUI.init(ctx);
+    window.TriviaUI.init(ctx);
   }
 
   api('/api/me').then((data) => startApp(data.user)).catch(showAuth);

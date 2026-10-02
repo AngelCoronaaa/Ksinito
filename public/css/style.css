@@ -1763,3 +1763,253 @@ button.chat-name:hover { text-decoration: underline; }
   .dk-tally { order: 3; flex-basis: 100%; justify-content: center; }
   .dk-slot { width: 12px; height: 12px; }
 }
+
+/* ---------- trivia ---------- */
+.tv-wheel-panel { display: grid; justify-items: center; gap: 16px; padding-top: 22px; }
+.tv-wheel-wrap {
+  position: relative;
+  width: min(330px, 78vw);
+  aspect-ratio: 1;
+}
+.tv-wheel {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: #333;
+  border: 7px solid #2a2111;
+  box-shadow: 0 0 0 2px var(--gold-deep), 0 0 0 5px rgba(232, 196, 106, .18), 0 18px 40px rgba(0, 0, 0, .5);
+  will-change: transform;
+}
+/* Líneas entre categorías y brillo; giran con la ruleta (no se repintan por fotograma). */
+.tv-wheel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: repeating-conic-gradient(rgba(255, 255, 255, .6) 0 .7deg, transparent .7deg 60deg);
+}
+.tv-wheel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, rgba(0, 0, 0, .28) 0 22%, transparent 23% 62%, rgba(0, 0, 0, .22) 100%);
+}
+.tv-seg {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding-top: 8%;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .55);
+  transform: rotate(var(--a));
+  pointer-events: none;
+}
+.tv-seg i { font-size: clamp(1.25rem, 6vw, 1.7rem); line-height: 1; }
+.tv-seg span { font-size: clamp(.6rem, 2.6vw, .74rem); font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.tv-pointer {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  z-index: 3;
+  width: 30px;
+  height: 34px;
+  translate: -50% 0;
+  background: linear-gradient(180deg, var(--gold-bright), var(--gold-deep));
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, .5));
+}
+.tv-hub {
+  position: absolute;
+  inset: 35%;
+  z-index: 2;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 3px solid #2a2111;
+  border-radius: 50%;
+  color: #1d1504;
+  font-family: var(--font-display);
+  font-size: clamp(.8rem, 3.4vw, 1rem);
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  background: radial-gradient(circle at 35% 30%, #fff3c9, var(--gold) 55%, var(--gold-deep));
+  box-shadow: 0 6px 16px rgba(0, 0, 0, .45), inset 0 -3px 0 rgba(0, 0, 0, .2);
+  transition: transform .2s var(--ease-spring), filter .2s;
+}
+.tv-hub:disabled { cursor: default; filter: grayscale(.55) brightness(.75); }
+.tv-hub:not(:disabled):hover { transform: scale(1.06); }
+.tv-hub:not(:disabled):active { transform: scale(.96); }
+/* Brillo que late cuando toca girar (opacidad de una capa aparte). */
+.tv-hub.ready:not(:disabled)::after {
+  content: '';
+  position: absolute;
+  inset: -9px;
+  z-index: -1;
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px rgba(232, 196, 106, .55), 0 0 26px rgba(232, 196, 106, .7);
+  opacity: 0;
+  animation: glowFade .9s ease-in-out infinite alternate;
+}
+
+.tv-steps { display: flex; gap: 10px; justify-content: center; }
+.tv-step {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 2px solid var(--c, rgba(255, 255, 255, .18));
+  background: rgba(255, 255, 255, .05);
+  color: var(--muted);
+  font-weight: 800;
+  font-size: .85rem;
+}
+.tv-step.ok { background: var(--win); border-color: var(--c, var(--win)); color: #05301a; animation: pop .4s var(--ease-out); }
+.tv-step.bad { background: var(--lose); border-color: var(--c, var(--lose)); color: #3a0b07; animation: pop .4s var(--ease-out); }
+.tv-step.current { border-color: var(--c, var(--gold)); color: var(--text); }
+.tv-step.current::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 2px solid var(--c, var(--gold));
+  opacity: 0;
+  animation: glowFade .8s ease-in-out infinite alternate;
+}
+.tv-hint { margin: 0; min-height: 1.3em; color: var(--muted); font-size: .85rem; text-align: center; }
+.tv-hint:empty { display: none; }
+
+.tv-panel { min-height: 420px; display: grid; }
+.tv-view { display: grid; gap: 14px; align-content: start; animation: fadeUp .35s var(--ease-out); }
+.tv-title { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: 1.7rem; color: var(--gold-bright); }
+.tv-lead { margin: 0; color: var(--muted); }
+.tv-lead strong { color: var(--text); }
+.tv-pays { display: grid; gap: 8px; }
+.tv-pay {
+  display: grid;
+  grid-template-columns: 3.2em 3.4em 1fr;
+  align-items: center;
+  padding: 9px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .04);
+  border: 1px solid rgba(255, 255, 255, .07);
+  font-variant-numeric: tabular-nums;
+}
+.tv-pay-hits { font-weight: 800; }
+.tv-pay-x { color: var(--gold); font-weight: 800; }
+.tv-pay-amount { justify-self: end; color: var(--win); font-weight: 700; }
+.tv-pay-amount::before { content: 'cobras '; color: var(--muted); font-weight: 400; font-size: .85em; }
+.tv-pay.lose { display: block; color: var(--muted); font-size: .85rem; text-align: center; background: none; border-style: dashed; }
+.tv-bet { display: grid; gap: 12px; margin-top: 4px; }
+.tv-bet-row { display: flex; gap: 10px 12px; align-items: center; flex-wrap: wrap; }
+.tv-bet-row .bet-summary { margin-right: auto; }
+
+.tv-status { display: flex; justify-content: space-between; align-items: center; gap: 10px; color: var(--muted); font-size: .85rem; }
+.tv-number { font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: .74rem; }
+.tv-stake { color: var(--gold); font-weight: 800; font-variant-numeric: tabular-nums; }
+.tv-category {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 14px;
+  border-radius: 999px;
+  background: var(--c);
+  color: #fff;
+  font-weight: 800;
+  font-size: .82rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .4);
+  animation: pop .35s var(--ease-out);
+}
+.tv-category.muted { background: rgba(255, 255, 255, .07); color: var(--muted); text-shadow: none; animation: none; }
+.tv-question { margin: 0; min-height: 2.6em; font-size: clamp(1.08rem, 2.4vw, 1.3rem); font-weight: 700; line-height: 1.35; }
+.tv-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.tv-options:empty { display: none; }
+.tv-opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, .14);
+  background: rgba(255, 255, 255, .06);
+  color: var(--text);
+  font-weight: 600;
+  text-align: left;
+  transition: transform .15s var(--ease-out), background-color .2s, border-color .2s, opacity .25s;
+}
+.tv-opt:not(:disabled):hover { transform: translateY(-2px); border-color: rgba(232, 196, 106, .55); background: rgba(255, 255, 255, .1); }
+.tv-opt:disabled { cursor: default; }
+.tv-letter {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .1);
+  font-size: .8rem;
+  font-weight: 800;
+}
+.tv-opt.picked { border-color: var(--gold); background: rgba(232, 196, 106, .14); }
+.tv-opt.right { border-color: var(--win); background: rgba(61, 220, 132, .2); animation: pop .4s var(--ease-out); }
+.tv-opt.right .tv-letter { background: var(--win); color: #05301a; }
+.tv-opt.wrong { border-color: var(--lose); background: rgba(255, 107, 94, .2); animation: shake .4s; }
+.tv-opt.wrong .tv-letter { background: var(--lose); color: #3a0b07; }
+.tv-opt.faded { opacity: .45; }
+.tv-options.enter .tv-opt { animation: fadeUp .35s var(--ease-out) backwards; }
+.tv-options.enter .tv-opt:nth-child(2) { animation-delay: .05s; }
+.tv-options.enter .tv-opt:nth-child(3) { animation-delay: .1s; }
+.tv-options.enter .tv-opt:nth-child(4) { animation-delay: .15s; }
+.tv-clock { display: flex; align-items: center; gap: 12px; }
+.tv-clock .phase-progress { flex: 1; margin: 0; }
+.tv-clock .progress-bar { transition: none; }
+.tv-clock .timer { min-width: 3ch; text-align: right; }
+.tv-feedback { margin: 0; min-height: 1.5em; color: var(--muted); font-weight: 600; text-align: center; }
+.tv-feedback.ok, .tv-feedback.bad { font-family: var(--font-display); font-size: 1.3rem; font-weight: 700; animation: pop .4s var(--ease-out); }
+.tv-feedback.ok { color: var(--win); }
+.tv-feedback.bad { color: var(--lose); }
+
+#tv-summary { justify-items: center; align-content: center; text-align: center; }
+.tv-score { font-family: var(--font-display); font-weight: 700; font-size: 4.2rem; line-height: 1; animation: pop .5s var(--ease-out); }
+.tv-score.ok { color: var(--gold-bright); }
+.tv-score.bad { color: var(--muted); }
+.tv-result { font-size: 1.6rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.tv-result.ok { color: var(--win); }
+.tv-result.bad { color: var(--lose); }
+
+.tv-next { justify-self: center; padding-inline: 1.6rem; }
+
+@media (max-width: 991.98px) {
+  .tv-panel { min-height: 0; }
+  /* En pantallas estrechas la ruleta solo se ve al girar: la pregunta queda arriba, sin scroll. */
+  #trivia:is([data-phase="question"], [data-phase="answered"], [data-phase="finished"], [data-phase="summary"]) .tv-wheel-wrap { display: none; }
+  #trivia:is([data-phase="question"], [data-phase="answered"], [data-phase="finished"], [data-phase="summary"]) .tv-wheel-panel { padding-top: 16px; }
+}
+@media (max-width: 575.98px) {
+  .tv-wheel-wrap { width: min(260px, 70vw); }
+  .tv-options { grid-template-columns: minmax(0, 1fr); }
+  .tv-opt { min-height: 48px; padding: 8px 12px; }
+  .tv-step { width: 32px; height: 32px; }
+  /* La fila de fichas se desliza en horizontal, como en los otros juegos. */
+  .tv-bet .chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 6px 2px;
+    margin: -6px 0;
+    scrollbar-width: none;
+  }
+  .tv-bet .chips::-webkit-scrollbar { display: none; }
+  .tv-bet .chip { flex-shrink: 0; }
+}

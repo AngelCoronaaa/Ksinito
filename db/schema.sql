@@ -143,3 +143,23 @@ CREATE TABLE IF NOT EXISTS duck_rounds (
   KEY idx_user_started (user_id, started_at),
   KEY idx_user_credited (user_id, credited_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Partidas de la trivia (src/trivia.js). La partida en juego vive en memoria; esta fila se crea
+-- en la misma transacción que cobra la apuesta y se cierra con un UPDATE condicional
+-- (status = 'playing'), así que cada partida se paga una sola vez. Si un reinicio deja alguna
+-- a medias, al arrancar se devuelve la apuesta (status = 'refunded'). `questions` guarda las
+-- preguntas que salieron ("cine:3+,arte:7-": + acierto, - fallo).
+CREATE TABLE IF NOT EXISTS trivia_rounds (
+  id         BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,
+  user_id    BIGINT UNSIGNED  NOT NULL,
+  bet        BIGINT           NOT NULL,
+  status     VARCHAR(10)      NOT NULL,
+  correct    TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  payout     BIGINT           NOT NULL DEFAULT 0,
+  questions  VARCHAR(255)     NULL,
+  created_at BIGINT           NOT NULL,
+  ended_at   BIGINT           NULL,
+  PRIMARY KEY (id),
+  KEY trivia_user (user_id, id),
+  KEY trivia_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

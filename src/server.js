@@ -12,6 +12,7 @@ const transfers = require('./transfers');
 const ranks = require('./ranks');
 const ads = require('./ads');
 const ducks = require('./ducks');
+const trivia = require('./trivia');
 const chat = require('./chat');
 const db = require('./db');
 const { SerialQueue } = require('./queue');
@@ -258,6 +259,7 @@ io.on('connection', (socket) => {
   socket.emit('roulette:bets', roulette.userBets(user.id));
   socket.emit('bj:lobby', lobbyState());
   socket.emit('rtc:config', { iceServers: ICE_SERVERS });
+  socket.emit('trivia:config', trivia.config);
   // Lo que viene de MySQL llega un poco después; los eventos se registran antes (abajo)
   // para no perder nada de lo que el cliente envíe nada más conectar.
   (async () => {
@@ -353,6 +355,13 @@ io.on('connection', (socket) => {
   // Recupera la ronda en juego (tras recargar o reconectar) sin empezar otra: null si no hay.
   on('ducks:resume', () => socket.emit('ducks:round', ducks.resume(user.id)));
 
+  // Trivia: el cliente solo pide girar y elige opción; categoría, pregunta y acierto los decide
+  // el servidor. Los eventos de la partida van a user:<id>.
+  on('trivia:start', (p) => trivia.start(user.id, p.amount));
+  on('trivia:spin', (p) => trivia.spin(user.id, p.roundId));
+  on('trivia:answer', (p) => trivia.answer(user.id, p.roundId, p.choice));
+  on('trivia:resume', () => socket.emit('trivia:round', trivia.resume(user.id)));
+
   socket.on('disconnect', () => {
     // Su cámara y micrófono (si los emitía) se apagan ya; el asiento se conserva unos segundos.
     for (const table of tables.values()) {
@@ -381,6 +390,7 @@ async function main() {
   await avatars.init();
   roulette = await RouletteGame.create(io);
   await ducks.init(io);
+  await trivia.init(io);
   server.listen(PORT, () => console.log(`Ksinito escuchando en http://localhost:${PORT}`));
 }
 

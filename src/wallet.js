@@ -75,27 +75,33 @@ function credit(userId, amount, reason, tx = null) {
 }
 
 /** Como apply(), pero también actualiza y anuncia el total apostado ('wagered'). */
-async function applyWager(userId, delta, reason, sql, params) {
-  const result = await transaction(async (tx) => {
+async function applyWager(userId, delta, reason, sql, params, tx = null) {
+  const run = async (tx) => {
     if ((await tx.query(sql, params)).affectedRows === 0) return null;
     const row = await tx.one(SQL.balanceAndWagered, [userId]);
     const credits = Number(row.credits);
     await tx.query(SQL.ledger, [userId, delta, credits, reason, Date.now()]);
     return { credits, wagered: Number(row.wagered) };
-  });
+  };
+  const announce = (result) => {
+    events.emit('balance', userId, result.credits);
+    events.emit('wagered', userId, result.wagered);
+  };
+  const result = tx ? await run(tx) : await transaction(run);
   if (!result) return null;
-  events.emit('balance', userId, result.credits);
-  events.emit('wagered', userId, result.wagered);
+  if (tx) tx.onCommit(() => announce(result));
+  else announce(result);
   return result.credits;
 }
 
 /**
  * Apuesta: resta créditos y suma lo mismo al total apostado. Los juegos la usan para
  * toda apuesta (también doblar y dividir). Devuelve el nuevo saldo, o null si no alcanza.
+ * `tx` (opcional): como en credit(), la hace dentro de esa transacción.
  */
-function bet(userId, amount, reason) {
+function bet(userId, amount, reason, tx = null) {
   assertAmount(amount);
-  return applyWager(userId, -amount, reason, SQL.bet, [amount, amount, userId, amount]);
+  return applyWager(userId, -amount, reason, SQL.bet, [amount, amount, userId, amount], tx);
 }
 
 /**
@@ -103,9 +109,9 @@ function bet(userId, amount, reason) {
  * repartir): suma los créditos y los descuenta del total apostado, para que apostar y
  * retirar en bucle no sirva para subir de rango.
  */
-function refundBet(userId, amount, reason) {
+function refundBet(userId, amount, reason, tx = null) {
   assertAmount(amount);
-  return applyWager(userId, amount, reason, SQL.refundBet, [amount, amount, userId]);
+  return applyWager(userId, amount, reason, SQL.refundBet, [amount, amount, userId], tx);
 }
 
 async function getWagered(userId) {

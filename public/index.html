@@ -67,6 +67,7 @@
           <button type="button" data-tab="roulette" class="nav-link active"><i class="bi bi-bullseye"></i><span>Ruleta</span></button>
           <button type="button" data-tab="blackjack" class="nav-link"><i class="bi bi-suit-club-fill"></i><span>Blackjack</span></button>
           <button type="button" data-tab="ducks" class="nav-link hidden"><i class="bi bi-crosshair"></i><span>Patos</span></button>
+          <button type="button" data-tab="trivia" class="nav-link"><i class="bi bi-patch-question-fill"></i><span>Trivia</span></button>
           <button type="button" data-tab="leaderboard" class="nav-link"><i class="bi bi-trophy-fill"></i><span>Ranking</span></button>
         </nav>
         <div class="user-box">
@@ -233,6 +234,71 @@
         <p id="dk-rules" class="rules">Gratis · Patos que salen de 2 en 2 · 3 disparos por oleada · Créditos por cada pato derribado, con tope diario</p>
       </section>
 
+      <!-- Trivia: apuestas, respondes 5 preguntas y cobras según los aciertos -->
+      <section id="trivia" class="game hidden">
+        <div class="row g-4 align-items-start">
+          <div class="col-lg-5">
+            <div class="glass-panel tv-wheel-panel">
+              <div class="tv-wheel-wrap">
+                <div class="tv-pointer" aria-hidden="true"></div>
+                <div id="tv-wheel" class="tv-wheel" aria-hidden="true"></div>
+                <button type="button" id="tv-spin" class="tv-hub" disabled>Girar</button>
+              </div>
+              <div id="tv-steps" class="tv-steps" role="list" aria-label="Preguntas de la partida"></div>
+              <p id="tv-hint" class="tv-hint" aria-live="polite"></p>
+            </div>
+          </div>
+
+          <div class="col-lg-7">
+            <div class="glass-panel tv-panel">
+              <!-- Antes de jugar: apuesta -->
+              <div id="tv-lobby" class="tv-view">
+                <h2 class="tv-title">Trivia</h2>
+                <p class="tv-lead">Apuesta, gira la ruleta y responde <strong>5 preguntas</strong>. Cobras según tus aciertos:</p>
+                <div id="tv-pays" class="tv-pays"></div>
+                <div class="tv-bet">
+                  <div id="tv-chips" class="chips"></div>
+                  <div class="tv-bet-row">
+                    <div class="bet-summary">Apuesta <strong id="tv-pending">0</strong></div>
+                    <button type="button" id="tv-bet-clear" class="btn btn-glass"><i class="bi bi-x-lg me-1"></i>Borrar</button>
+                    <button type="button" id="tv-play" class="btn btn-gold" disabled><i class="bi bi-play-fill me-1"></i>Jugar</button>
+                  </div>
+                  <p id="tv-limits" class="hint"></p>
+                </div>
+              </div>
+
+              <!-- Partida -->
+              <div id="tv-game" class="tv-view hidden">
+                <div class="tv-status">
+                  <span id="tv-number" class="tv-number"></span>
+                  <span class="tv-stake"><i class="bi bi-coin me-1"></i><span id="tv-stake"></span></span>
+                </div>
+                <div id="tv-category" class="tv-category"></div>
+                <p id="tv-question" class="tv-question" aria-live="polite"></p>
+                <div id="tv-options" class="tv-options"></div>
+                <div id="tv-clock" class="tv-clock hidden">
+                  <div class="progress phase-progress" role="progressbar" aria-label="Tiempo para responder">
+                    <div id="tv-progress" class="progress-bar"></div>
+                  </div>
+                  <span id="tv-seconds" class="timer"></span>
+                </div>
+                <p id="tv-feedback" class="tv-feedback" aria-live="assertive"></p>
+                <button type="button" id="tv-next" class="btn btn-gold tv-next hidden"><i class="bi bi-arrow-repeat me-1"></i>Girar siguiente</button>
+              </div>
+
+              <!-- Resultado -->
+              <div id="tv-summary" class="tv-view hidden">
+                <div id="tv-score" class="tv-score"></div>
+                <div id="tv-result" class="tv-result"></div>
+                <p id="tv-result-detail" class="tv-lead"></p>
+                <button type="button" id="tv-again" class="btn btn-gold"><i class="bi bi-arrow-repeat me-1"></i>Jugar otra vez</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="rules">Ciencia · Geografía · Historia · Cine · Arte · Deportes · 20 segundos por pregunta · 5/5 ×3 · 4/5 ×2 · 3/5 ×1,5 · Con menos de 3 aciertos pierdes la apuesta</p>
+      </section>
+
       <!-- Ranking -->
       <section id="leaderboard" class="game hidden">
         <div class="row g-4">
@@ -262,7 +328,7 @@
             <div class="glass-panel mt-4">
               <h3 class="panel-title mb-2"><i class="bi bi-bar-chart-steps me-1"></i>Rangos</h3>
               <div id="rank-ladder" class="rank-ladder"></div>
-              <p class="rules text-start mb-0">Subes de rango con el total que apuestas en ruleta y blackjack. Cada rango tiene tres divisiones (I, II, III), salvo Mito. Las apuestas que retiras antes de jugarse no cuentan.</p>
+              <p class="rules text-start mb-0">Subes de rango con el total que apuestas en ruleta, blackjack y trivia. Cada rango tiene tres divisiones (I, II, III), salvo Mito. Las apuestas que retiras antes de jugarse no cuentan.</p>
             </div>
           </div>
         </div>
@@ -443,6 +509,7 @@
   <script src="/js/rewards.js"></script>
   <script src="/js/media.js"></script>
   <script src="/js/ducks.js"></script>
+  <script src="/js/trivia.js"></script>
   <script src="/js/app.js"></script>
 </body>
 </html>

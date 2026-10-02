@@ -1,7 +1,7 @@
 # Ksinito
 
 Casino online con **Ruleta** y **Blackjack** multijugador en tiempo real, con créditos ficticios,
-y un minijuego gratis de **Patos** para ganar créditos.
+una **Trivia** de preguntas con apuesta y un minijuego gratis de **Patos** para ganar créditos.
 
 ## Base de datos: MySQL
 
@@ -100,7 +100,7 @@ Al arrancar, la app espera hasta ~1 minuto a que MySQL responda. `GET /api/healt
 - La pestaña **Ranking** muestra el top 10 de jugadores con más créditos (podio para los tres
   primeros), tu posición si no estás en el top, tu rango y la tabla de rangos. Se actualiza
   sola cada 15 s mientras está abierta.
-- El **rango** depende del total que has apostado en ruleta y blackjack (incluye doblar y
+- El **rango** depende del total que has apostado en ruleta, blackjack y trivia (incluye doblar y
   dividir). Las apuestas que retiras antes de jugarse se descuentan, así que apostar y retirar
   en bucle no sirve para subir. Se guarda en `users.wagered`.
 - Rangos, de menor a mayor (desde cuánto apostado empieza cada uno):
@@ -246,6 +246,27 @@ fichas se desliza en horizontal.
   el zapato; la carta tapada del crupier se gira al descubrirse. Cada jugador tiene 20 s por turno (si no, se planta solo).
 - Si cierras la pestaña, conservas el asiento 20 s por si recargas.
 
+## Trivia
+
+- Apuestas de **10 a 100.000** y respondes **5 preguntas**. Antes de cada una gira una ruleta con
+  seis categorías: ciencia, geografía, historia, cine, arte y deportes.
+- Al terminar cobras según los aciertos: **5/5 ×3**, **4/5 ×2**, **3/5 ×1,5** (redondeado hacia
+  abajo); con menos de 3 pierdes lo apostado.
+- **20 s por pregunta**; si se acaba el tiempo cuenta como fallo. Si no pulsas "Girar" en 30 s,
+  la ruleta gira sola, así que una partida abandonada siempre termina.
+- **El servidor decide todo**: la categoría, la pregunta y el orden de las opciones. La pregunta
+  no se envía hasta que la ruleta termina de girar, y cuál era la correcta solo se envía después
+  de responder. No se repiten preguntas en una partida y se evitan las que viste hace poco.
+- Las preguntas están en `src/trivia-questions.js` (25 por categoría); para añadir más, pon la
+  respuesta correcta la primera (el servidor baraja las opciones). Evita preguntas cuya respuesta
+  cambie con el tiempo. `npm test` comprueba que cada una tenga 4 opciones distintas.
+- Cada partida se guarda en `trivia_rounds` (apuesta, aciertos, pago y preguntas que salieron).
+  Si el servidor se reinicia con una partida a medias, al arrancar se devuelve la apuesta.
+- Al recargar la página vuelves a la partida en juego, con el tiempo que quedaba.
+- Las respuestas se pueden buscar en internet en esos 20 s: con apuestas altas, un jugador que lo
+  haga gana casi siempre. Si pasa, baja `MAX_BET`, `ANSWER_MS` o los multiplicadores
+  (constantes al principio de `src/trivia.js`).
+
 ## Límite de cuentas
 
 - Solo limita **crear** cuentas; entrar con una existente funciona siempre.
@@ -296,6 +317,8 @@ src/
   roulette.js   Lógica de la ruleta
   blackjack.js  Lógica de las mesas de blackjack
   ducks.js      Juego de patos: rondas, patos, validación de disparos, tope diario y pago
+  trivia.js     Trivia: partidas, ruleta de categorías, preguntas, tiempos y pago
+  trivia-questions.js  Banco de preguntas de la trivia, por categoría
   env.js        Lectura y validación de variables de entorno numéricas
 public/         Cliente: Bootstrap 5 + Bootstrap Icons, JS sin frameworks y sin build.
                 Bootstrap, iconos, fuentes (Inter, Cinzel) y canvas-confetti se sirven
@@ -303,5 +326,6 @@ public/         Cliente: Bootstrap 5 + Bootstrap Icons, JS sin frameworks y sin 
   spots/        Vídeos e imágenes de los anuncios con recompensa
   js/ducks.js   Juego de patos en el navegador (canvas, sonidos, marcador)
   js/duck-path.js  Trayectoria de los patos (módulo ESM que usan el navegador y el servidor)
+  js/trivia.js  Trivia en el navegador (ruleta de categorías, preguntas, resultado)
 test/           Pruebas (npm test, con node:test)
 ```
