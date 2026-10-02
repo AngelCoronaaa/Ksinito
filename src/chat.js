@@ -6,6 +6,7 @@
 
 const { query } = require('./db');
 const avatars = require('./avatars');
+const ranks = require('./ranks');
 const { GameError } = require('./errors');
 
 const MAX_LENGTH = 300;
@@ -17,7 +18,7 @@ const BURST_MS = 8_000; // …en esta ventana, por jugador
 const SQL = {
   insert: 'INSERT INTO chat_messages (channel, user_id, text, created_at) VALUES (?, ?, ?, ?)',
   recent: `
-    SELECT m.id, m.channel, m.user_id, m.text, m.created_at, u.username, u.public_id
+    SELECT m.id, m.channel, m.user_id, m.text, m.created_at, u.username, u.public_id, u.wagered
     FROM chat_messages m JOIN users u ON u.id = m.user_id
     WHERE m.channel = ? ORDER BY m.id DESC LIMIT ?`,
   // MySQL no deja usar LIMIT dentro de un IN/subconsulta directa; va en una tabla derivada.
@@ -35,6 +36,8 @@ const toMessage = (row) => ({
   publicId: row.public_id,
   username: row.username,
   avatar: avatars.avatarUrl(Number(row.user_id)),
+  // Historial: el rango sale de la consulta; mensaje nuevo: de la caché de ranks.
+  rank: row.wagered === undefined ? ranks.badgeOf(Number(row.user_id)) : ranks.rankOf(Number(row.wagered)),
   text: row.text,
   at: Number(row.created_at),
 });

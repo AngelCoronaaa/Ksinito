@@ -14,6 +14,7 @@
 const crypto = require('node:crypto');
 const wallet = require('./wallet');
 const { avatarUrl } = require('./avatars');
+const { badgeOf } = require('./ranks');
 const { SerialQueue } = require('./queue');
 const { GameError, assertInt } = require('./errors');
 
@@ -147,6 +148,7 @@ class BlackjackTable {
             userId: s.userId,
             username: s.username,
             avatar: avatarUrl(s.userId),
+            rank: badgeOf(s.userId),
             // Cámara y/o micrófono: `peer` es el socket que emite (los espectadores le piden
             // el vídeo/audio por WebRTC) y `rev` cambia cada vez que enciende o apaga algo.
             media: s.media && { peer: s.media.socket, video: s.media.video, audio: s.media.audio, rev: s.media.rev },
@@ -218,7 +220,7 @@ class BlackjackTable {
 
     if (seat.hands.length === 0) {
       // No está jugando la mano actual: se va ya (y se le devuelve la apuesta si la hizo).
-      if (seat.bet > 0) await wallet.credit(userId, seat.bet, 'blackjack:refund');
+      if (seat.bet > 0) await wallet.refundBet(userId, seat.bet, 'blackjack:refund');
       this.seats[i] = null;
       if (this.phase === 'waiting' || this.phase === 'betting') this.checkBets();
     } else {
@@ -271,7 +273,7 @@ class BlackjackTable {
     const seat = this.seats[this.requireSeat(user.id)];
     if (seat.bet > 0) throw new GameError('Ya hiciste tu apuesta');
     assertInt(amount, MIN_BET, MAX_BET, 'La apuesta');
-    if ((await wallet.debit(user.id, amount, 'blackjack:bet')) === null) throw new GameError('Créditos insuficientes');
+    if ((await wallet.bet(user.id, amount, 'blackjack:bet')) === null) throw new GameError('Créditos insuficientes');
     seat.bet = amount;
     this.checkBets();
     this.broadcast();
@@ -390,7 +392,7 @@ class BlackjackTable {
         if (hand.cards.length !== 2 || hand.splitAces) {
           throw new GameError('Solo puedes doblar con tus dos primeras cartas');
         }
-        if ((await wallet.debit(user.id, hand.bet, 'blackjack:double')) === null) throw new GameError('Créditos insuficientes');
+        if ((await wallet.bet(user.id, hand.bet, 'blackjack:double')) === null) throw new GameError('Créditos insuficientes');
         hand.bet *= 2;
         hand.doubled = true;
         hand.cards.push(this.draw());
@@ -402,7 +404,7 @@ class BlackjackTable {
         if (seat.hands.length !== 1 || hand.cards.length !== 2 || rankValue(a.r) !== rankValue(b.r)) {
           throw new GameError('Solo puedes dividir una pareja con tus dos primeras cartas');
         }
-        if ((await wallet.debit(user.id, hand.bet, 'blackjack:split')) === null) throw new GameError('Créditos insuficientes');
+        if ((await wallet.bet(user.id, hand.bet, 'blackjack:split')) === null) throw new GameError('Créditos insuficientes');
         const aces = a.r === 'A';
         seat.hands = [a, b].map((card) => {
           const h = newHand([card, this.draw()], hand.bet, true);

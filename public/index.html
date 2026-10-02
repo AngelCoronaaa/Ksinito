@@ -67,6 +67,7 @@
           <button type="button" data-tab="roulette" class="nav-link active"><i class="bi bi-bullseye"></i><span>Ruleta</span></button>
           <button type="button" data-tab="blackjack" class="nav-link"><i class="bi bi-suit-club-fill"></i><span>Blackjack</span></button>
           <button type="button" data-tab="ducks" class="nav-link hidden"><i class="bi bi-crosshair"></i><span>Patos</span></button>
+          <button type="button" data-tab="leaderboard" class="nav-link"><i class="bi bi-trophy-fill"></i><span>Ranking</span></button>
         </nav>
         <div class="user-box">
           <div class="credits" title="Tus créditos">
@@ -83,6 +84,7 @@
           </button>
           <button type="button" class="user-chip" data-bs-toggle="modal" data-bs-target="#profile-modal" title="Tu perfil">
             <span id="avatar" class="avatar" aria-hidden="true"></span>
+            <span id="my-rank" class="my-rank" aria-hidden="true"></span>
             <span id="username" class="username"></span>
           </button>
           <button type="button" id="logout" class="btn btn-glass btn-icon" aria-label="Salir" title="Salir">
@@ -229,6 +231,41 @@
           </div>
         </div>
         <p id="dk-rules" class="rules">Gratis · Patos que salen de 2 en 2 · 3 disparos por oleada · Créditos por cada pato derribado, con tope diario</p>
+      </section>
+
+      <!-- Ranking -->
+      <section id="leaderboard" class="game hidden">
+        <div class="row g-4">
+          <div class="col-lg-8">
+            <div class="glass-panel lb-panel">
+              <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                <h3 class="panel-title"><i class="bi bi-trophy-fill me-1"></i>Top 10 · más créditos</h3>
+                <span id="lb-updated" class="lb-updated"></span>
+              </div>
+              <div id="lb-podium" class="lb-podium"></div>
+              <ol id="lb-list" class="lb-list"></ol>
+              <p id="lb-empty" class="hint hidden">Todavía no hay jugadores en el ranking.</p>
+              <div id="lb-me" class="lb-row lb-me hidden"></div>
+            </div>
+          </div>
+          <div class="col-lg-4">
+            <div id="my-rank-card" class="glass-panel my-rank-card">
+              <h3 class="panel-title mb-2">Tu rango</h3>
+              <div class="mr-emblem"></div>
+              <div class="mr-label"></div>
+              <div class="mr-wagered"></div>
+              <div class="progress phase-progress mr-progress" role="progressbar" aria-label="Progreso al siguiente rango">
+                <div class="progress-bar mr-bar"></div>
+              </div>
+              <div class="mr-next"></div>
+            </div>
+            <div class="glass-panel mt-4">
+              <h3 class="panel-title mb-2"><i class="bi bi-bar-chart-steps me-1"></i>Rangos</h3>
+              <div id="rank-ladder" class="rank-ladder"></div>
+              <p class="rules text-start mb-0">Subes de rango con el total que apuestas en ruleta y blackjack. Cada rango tiene tres divisiones (I, II, III), salvo Mito. Las apuestas que retiras antes de jugarse no cuentan.</p>
+            </div>
+          </div>
+        </div>
       </section>
     </main>
 
@@ -400,6 +437,7 @@
   <script src="/vendor/confetti/confetti.browser.js"></script>
   <script src="/js/roulette.js"></script>
   <script src="/js/blackjack.js"></script>
+  <script src="/js/ranks.js"></script>
   <script src="/js/chat.js"></script>
   <script src="/js/transfer.js"></script>
   <script src="/js/rewards.js"></script>

@@ -167,7 +167,7 @@ class RouletteGame {
     if (onSpot + amount > MAX_BET_PER_SPOT) throw new GameError(`Máximo ${MAX_BET_PER_SPOT} por casilla`);
     if (inRound + amount > MAX_BET_PER_ROUND) throw new GameError(`Máximo ${MAX_BET_PER_ROUND} por ronda`);
 
-    if ((await wallet.debit(user.id, amount, `roulette:bet:${key}`)) === null) {
+    if ((await wallet.bet(user.id, amount, `roulette:bet:${key}`)) === null) {
       throw new GameError('Créditos insuficientes');
     }
     bets.set(key, { type, value, amount: onSpot + amount });
@@ -182,7 +182,7 @@ class RouletteGame {
       if (!bets) return;
       const total = [...bets.values()].reduce((sum, b) => sum + b.amount, 0);
       // Primero se devuelve el dinero: si MySQL falla, las apuestas siguen en la mesa.
-      if (total > 0) await wallet.credit(user.id, total, 'roulette:refund');
+      if (total > 0) await wallet.refundBet(user.id, total, 'roulette:refund');
       this.bets.delete(user.id);
       this.sendBets(user.id);
     });

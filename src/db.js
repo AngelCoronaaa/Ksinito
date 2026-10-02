@@ -65,6 +65,35 @@ function schemaStatements() {
     .filter(Boolean);
 }
 
+const columnExists = async (table, column) =>
+  !!(await one('SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?', [table, column]));
+const indexExists = async (table, index) =>
+  !!(await one('SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?', [table, index]));
+
+/**
+ * Cambios a tablas que ya existían (schema.sql solo crea las que faltan). Cada paso
+ * comprueba si ya está hecho, así que se pueden ejecutar en cada arranque.
+ */
+const MIGRATIONS = [
+  async function usersWagered() {
+    if (await columnExists('users', 'wagered')) return;
+    await query('ALTER TABLE users ADD COLUMN wagered BIGINT NOT NULL DEFAULT 0 AFTER credits');
+    // Lo apostado hasta ahora sale del registro de movimientos: apuestas menos reembolsos.
+    await query(`
+      UPDATE users u JOIN (
+        SELECT user_id, SUM(-delta) AS w FROM ledger
+        WHERE reason LIKE 'roulette:bet:%'
+           OR reason IN ('blackjack:bet', 'blackjack:double', 'blackjack:split', 'roulette:refund', 'blackjack:refund')
+        GROUP BY user_id
+      ) l ON l.user_id = u.id
+      SET u.wagered = GREATEST(l.w, 0)`);
+    console.log('[db] Migración: users.wagered creada y calculada a partir del registro de apuestas');
+  },
+  async function usersCreditsIndex() {
+    if (!(await indexExists('users', 'users_credits'))) await query('ALTER TABLE users ADD INDEX users_credits (credits)');
+  },
+];
+
 /** Conecta (reintentando mientras MySQL arranca) y crea las tablas que falten. */
 async function init() {
   pool = mysql.createPool(connectionOptions());
@@ -79,6 +108,7 @@ async function init() {
     }
   }
   for (const sql of schemaStatements()) await pool.query(sql);
+  for (const migrate of MIGRATIONS) await migrate();
   console.log(`[db] Conectado a MySQL en ${describe()}`);
 }
 

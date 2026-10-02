@@ -16,11 +16,14 @@ CREATE TABLE IF NOT EXISTS users (
   username              VARCHAR(20)     NOT NULL,
   password_hash         VARCHAR(100)    NOT NULL,
   credits               BIGINT          NOT NULL DEFAULT 0,
+  -- Total apostado (apuestas menos reembolsos); decide el rango del jugador (src/ranks.js).
+  wagered               BIGINT          NOT NULL DEFAULT 0,
   welcome_bonus_granted TINYINT(1)      NOT NULL DEFAULT 0,
   created_at            BIGINT          NOT NULL,
   PRIMARY KEY (id),
   UNIQUE KEY users_username (username),
   UNIQUE KEY users_public_id (public_id),
+  KEY users_credits (credits), -- ranking por créditos
   CONSTRAINT users_credits_not_negative CHECK (credits >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

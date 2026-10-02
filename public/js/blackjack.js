@@ -205,6 +205,7 @@ window.BlackjackUI = (() => {
     plate.className = 'seat-plate';
     const nameRow = document.createElement('div');
     nameRow.className = 'seat-name-row';
+    if (seat.rank) nameRow.append(ctx.rank.emblem(seat.rank, 18));
     nameRow.append(span('seat-name', seat.username));
     if (i === mine) nameRow.append(span('you-badge', 'tú'));
     if (seat.media?.audio) {

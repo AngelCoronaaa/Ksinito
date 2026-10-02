@@ -58,11 +58,12 @@
    * Anuncia una ganancia en el centro de la pantalla. Si ya hay una en curso,
    * espera su turno para que no se tapen (p. ej. ganar en ruleta y blackjack a la vez).
    * `amount` es lo que cobras; `net` (opcional) lo que ganas descontando lo apostado.
+   * Con `badge` (un elemento, p. ej. el emblema de un rango) se muestra eso en vez de la cantidad.
    */
-  function celebrate({ amount, net = null, title = null, detail = '', big = false }) {
+  function celebrate({ amount = 0, net = null, title = null, detail = '', big = false, badge = null }) {
     // Si cobraste algo pero en total perdiste (p. ej. aciertas rojo y fallas un pleno), no es "ganaste".
     title ??= net !== null && net <= 0 ? '¡Acertaste!' : '¡Ganaste!';
-    winQueue.push({ amount, net, title, detail, big });
+    winQueue.push({ amount, net, title, detail, big, badge });
     if (!winShowing) nextWin();
   }
 
@@ -99,7 +100,8 @@
 
     const card = document.createElement('div');
     card.className = 'win-card';
-    const amount = span('c-amount', '+0');
+    const amount = win.badge ?? span('c-amount', '+0');
+    if (win.badge) amount.classList.add('c-badge');
     card.append(span('c-label', win.title), amount);
     const details = [win.detail];
     if (win.net !== null && win.net !== win.amount) details.push(`Neto ${win.net >= 0 ? '+' : '−'}${fmt(Math.abs(win.net))}`);
@@ -112,9 +114,9 @@
     el.classList.remove('show');
     void el.offsetWidth; // reinicia la animación
     el.classList.add('show');
-    countUp(amount, win.amount);
+    if (!win.badge) countUp(amount, win.amount);
 
-    if (fireConfetti && !reducedMotion.matches && (win.net ?? win.amount) > 0) {
+    if (fireConfetti && !reducedMotion.matches && (win.badge || (win.net ?? win.amount) > 0)) {
       confettiBurst(win.big ? 170 : 90);
       if (win.big) {
         setTimeout(() => fireConfetti({ particleCount: 120, spread: 120, startVelocity: 45, origin: { y: 0.45 }, colors: CONFETTI_COLORS }), 250);
@@ -400,9 +402,11 @@
       });
       // El juego de patos solo dibuja mientras se ve (su ronda sigue en el servidor igualmente).
       window.DucksUI.setActive(btn.dataset.tab === 'ducks');
-      if (btn.dataset.tab === 'roulette' || btn.dataset.tab === 'ducks') {
+      // El ranking solo se pide al servidor mientras está abierto.
+      window.RankUI.setActive(btn.dataset.tab === 'leaderboard');
+      if (btn.dataset.tab !== 'blackjack') {
         if (btn.dataset.tab === 'roulette') window.RouletteUI.resize();
-        window.ChatUI.setChannel('roulette', 'Ruleta'); // los patos no tienen chat propio
+        window.ChatUI.setChannel('roulette', 'Ruleta'); // patos y ranking no tienen chat propio
       } else {
         const { channel, label } = window.BlackjackUI.chatChannel();
         window.ChatUI.setChannel(channel, label);
@@ -449,7 +453,9 @@
       chat: window.ChatUI,
       transfer: window.TransferUI,
       media: window.MediaUI,
+      rank: window.RankUI,
     };
+    window.RankUI.init(ctx);
     window.ChatUI.init(ctx);
     window.TransferUI.init(ctx);
     window.RewardsUI?.init(ctx); // si un bloqueador de anuncios impide cargarlo, el resto sigue

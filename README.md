@@ -95,6 +95,33 @@ Al arrancar, la app espera hasta ~1 minuto a que MySQL responda. `GET /api/healt
 - El chat (botón flotante abajo a la derecha) tiene un canal para la ruleta y otro por cada
   mesa de blackjack. Se guardan los últimos 200 mensajes por canal.
 
+## Ranking y rangos
+
+- La pestaña **Ranking** muestra el top 10 de jugadores con más créditos (podio para los tres
+  primeros), tu posición si no estás en el top, tu rango y la tabla de rangos. Se actualiza
+  sola cada 15 s mientras está abierta.
+- El **rango** depende del total que has apostado en ruleta y blackjack (incluye doblar y
+  dividir). Las apuestas que retiras antes de jugarse se descuentan, así que apostar y retirar
+  en bucle no sirve para subir. Se guarda en `users.wagered`.
+- Rangos, de menor a mayor (desde cuánto apostado empieza cada uno):
+
+  | Rango | Desde | Divisiones (I · II · III) |
+  |---|---|---|
+  | Aprendiz | 0 | 0 · 300 · 600 |
+  | Jugador | 1.000 | 1.000 · 2.000 · 3.500 |
+  | Apostador | 5.000 | 5.000 · 10.000 · 15.000 |
+  | Tahúr | 20.000 | 20.000 · 35.000 · 55.000 |
+  | As | 75.000 | 75.000 · 125.000 · 185.000 |
+  | Magnate | 250.000 | 250.000 · 400.000 · 575.000 |
+  | Barón | 750.000 | 750.000 · 1.150.000 · 1.550.000 |
+  | Leyenda | 2.000.000 | 2.000.000 · 3.000.000 · 4.000.000 |
+  | Mito | 5.000.000 | (sin divisiones) |
+
+- Cada rango tiene su emblema (SVG generado en `public/js/ranks.js`), y la división se muestra
+  con 1–3 gemas. El emblema aparece junto a tu avatar, en el chat, en las sillas del blackjack y
+  en el ranking. Al subir de división sale un anuncio en el centro de la pantalla.
+- Los umbrales se cambian en `TIERS` de `src/ranks.js`.
+
 ## Créditos
 
 - Cada cuenta recibe **100 créditos una sola vez**, al iniciar sesión por primera vez.
@@ -256,7 +283,8 @@ src/
   ads.config.json  Catálogo de anuncios (archivos en public/spots/)
   chat.js       Chat de la ruleta y de cada mesa (el servidor también reenvía la
                 señalización WebRTC de las cámaras, en server.js)
-  wallet.js     Único módulo que modifica créditos
+  wallet.js     Único módulo que modifica créditos (y el total apostado)
+  ranks.js      Rangos por total apostado y ranking del top 10
   roulette.js   Lógica de la ruleta
   blackjack.js  Lógica de las mesas de blackjack
   ducks.js      Juego de patos: rondas, patos, validación de disparos, tope diario y pago

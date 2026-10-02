@@ -16,6 +16,10 @@ const events = new EventEmitter();
 const SQL = {
   balance: 'SELECT credits FROM users WHERE id = ?',
   debit: 'UPDATE users SET credits = credits - ? WHERE id = ? AND credits >= ?',
+  // Apostar suma al total apostado (users.wagered, que decide el rango); un reembolso lo resta.
+  bet: 'UPDATE users SET credits = credits - ?, wagered = wagered + ? WHERE id = ? AND credits >= ?',
+  refundBet: 'UPDATE users SET credits = credits + ?, wagered = GREATEST(wagered - ?, 0) WHERE id = ?',
+  balanceAndWagered: 'SELECT credits, wagered FROM users WHERE id = ?',
   credit: 'UPDATE users SET credits = credits + ? WHERE id = ?',
   bonus: 'UPDATE users SET credits = credits + ?, welcome_bonus_granted = 1 WHERE id = ? AND welcome_bonus_granted = 0',
   ledger: 'INSERT INTO ledger (user_id, delta, balance_after, reason, created_at) VALUES (?, ?, ?, ?, ?)',
@@ -70,6 +74,45 @@ function credit(userId, amount, reason, tx = null) {
   return apply(userId, amount, reason, SQL.credit, [amount, userId], tx);
 }
 
+/** Como apply(), pero también actualiza y anuncia el total apostado ('wagered'). */
+async function applyWager(userId, delta, reason, sql, params) {
+  const result = await transaction(async (tx) => {
+    if ((await tx.query(sql, params)).affectedRows === 0) return null;
+    const row = await tx.one(SQL.balanceAndWagered, [userId]);
+    const credits = Number(row.credits);
+    await tx.query(SQL.ledger, [userId, delta, credits, reason, Date.now()]);
+    return { credits, wagered: Number(row.wagered) };
+  });
+  if (!result) return null;
+  events.emit('balance', userId, result.credits);
+  events.emit('wagered', userId, result.wagered);
+  return result.credits;
+}
+
+/**
+ * Apuesta: resta créditos y suma lo mismo al total apostado. Los juegos la usan para
+ * toda apuesta (también doblar y dividir). Devuelve el nuevo saldo, o null si no alcanza.
+ */
+function bet(userId, amount, reason) {
+  assertAmount(amount);
+  return applyWager(userId, -amount, reason, SQL.bet, [amount, amount, userId, amount]);
+}
+
+/**
+ * Devuelve una apuesta que no llegó a jugarse (quitar apuestas, levantarse antes de
+ * repartir): suma los créditos y los descuenta del total apostado, para que apostar y
+ * retirar en bucle no sirva para subir de rango.
+ */
+function refundBet(userId, amount, reason) {
+  assertAmount(amount);
+  return applyWager(userId, amount, reason, SQL.refundBet, [amount, amount, userId]);
+}
+
+async function getWagered(userId) {
+  const row = await one(SQL.balanceAndWagered, [userId]);
+  return row ? Number(row.wagered) : 0;
+}
+
 /** Da los 100 créditos de bienvenida. Solo tiene efecto la primera vez. */
 async function grantWelcomeBonus(userId) {
   return (await apply(userId, WELCOME_BONUS, 'welcome_bonus', SQL.bonus, [WELCOME_BONUS, userId])) !== null;
@@ -114,4 +157,4 @@ async function transfer(fromId, toId, amount) {
   return result.fromAfter;
 }
 
-module.exports = { events, getBalance, debit, credit, transfer, grantWelcomeBonus, WELCOME_BONUS };
+module.exports = { events, getBalance, getWagered, debit, credit, bet, refundBet, transfer, grantWelcomeBonus, WELCOME_BONUS };

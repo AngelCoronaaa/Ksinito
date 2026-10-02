@@ -9,6 +9,7 @@ const { Server } = require('socket.io');
 const auth = require('./auth');
 const profile = require('./profile');
 const transfers = require('./transfers');
+const ranks = require('./ranks');
 const ads = require('./ads');
 const ducks = require('./ducks');
 const chat = require('./chat');
@@ -62,6 +63,7 @@ app.get('/api/health', async (req, res) => {
 app.use('/api', auth.router);
 app.use('/api', profile.router);
 app.use('/api', transfers.router);
+app.use('/api', ranks.router);
 app.use('/api', ads.router);
 app.use('/api', ducks.router);
 
@@ -209,6 +211,13 @@ avatars.events.on('change', (userId, avatar) => {
   tableOf(userId)?.broadcast();
 });
 
+// Rango del jugador tras cada apuesta (con `up` si subió). Si cambió de escalón y está
+// sentado, su mesa se actualiza para que los demás vean el nuevo emblema.
+ranks.events.on('change', (userId, progress, { up, stepChanged }) => {
+  io.to(`user:${userId}`).emit('rank', { ...progress, up });
+  if (stepChanged) tableOf(userId)?.broadcast();
+});
+
 // El que recibe créditos se entera al momento, esté en la pestaña que esté.
 transfers.events.on('sent', ({ toUserId, amount, from }) => {
   io.to(`user:${toUserId}`).emit('transfer:received', { amount, from });
@@ -253,6 +262,7 @@ io.on('connection', (socket) => {
   // para no perder nada de lo que el cliente envíe nada más conectar.
   (async () => {
     socket.emit('balance', { credits: await wallet.getBalance(user.id) });
+    socket.emit('rank', { ...ranks.progressOf(await ranks.load(user.id, { fresh: true })), up: false });
     socket.emit('chat:history', { channel: roulette.room, messages: await chat.history(roulette.room) });
   })().catch((err) => console.error('[socket] Estado inicial', err));
 
@@ -297,11 +307,12 @@ io.on('connection', (socket) => {
     socket.emit('chat:history', { channel: table.room, messages: await chat.history(table.room) });
   });
   on('bj:sit', (p) =>
-    seating.run(() => {
+    seating.run(async () => {
       const table = getTable(p.table);
       const current = tableOf(user.id);
       if (current && current !== table) throw new GameError(`Ya estás sentado en la ${current.name}`);
       watch(table); // antes de sentarse, para recibir el estado que se envía al hacerlo
+      await ranks.load(user.id); // su emblema en la silla
       return table.sit(user, p.seat);
     })
   );
@@ -329,6 +340,7 @@ io.on('connection', (socket) => {
     const channel = p.channel;
     const allowed = channel === roulette.room || [...tables.values()].some((t) => t.room === channel && socket.rooms.has(channel));
     if (!allowed) throw new GameError('Canal de chat no válido');
+    await ranks.load(user.id); // su emblema junto al nombre
     io.to(channel).emit('chat:message', await chat.post(user, channel, p.text));
   });
   on('bj:bet', (p) => requireTable(user.id).placeBet(user, p.amount));

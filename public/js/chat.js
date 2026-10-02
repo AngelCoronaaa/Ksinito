@@ -50,6 +50,7 @@ window.ChatUI = (() => {
     const body = document.createElement('div');
     body.className = 'chat-body';
     body.append(meta, text);
+    if (m.rank) meta.prepend(ctx.rank.emblem(m.rank, 16));
     el.append(ctx.avatar(m.username, m.avatar, 'chat-avatar'), body);
     return el;
   }
