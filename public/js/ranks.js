@@ -203,7 +203,8 @@ window.RankUI = (() => {
     name.className = 'lb-name';
     name.textContent = entry.username;
     name.title = `ID ${entry.publicId}`;
-    wrap.append(ctx.avatar(entry.username, entry.avatar, size), name);
+    // En el podio caben las alas; en las filas, solo el aro.
+    wrap.append(ctx.avatar(entry.username, entry.avatar, size, entry.frame, { wings: size !== 'lb-avatar' }), name);
     return wrap;
   }
 

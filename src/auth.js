@@ -138,6 +138,8 @@ async function publicUser(user) {
     username: user.username,
     credits: await wallet.getBalance(id),
     avatar: avatars.avatarUrl(id),
+    // Se carga aquí y no arriba: cosmetics.js también usa este módulo.
+    frame: require('./cosmetics').frameOf(id),
   };
 }
 

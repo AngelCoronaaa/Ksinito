@@ -8,6 +8,7 @@ const { EventEmitter } = require('node:events');
 const express = require('express');
 const auth = require('./auth');
 const avatars = require('./avatars');
+const cosmetics = require('./cosmetics');
 const wallet = require('./wallet');
 const { query, one } = require('./db');
 
@@ -102,6 +103,7 @@ async function top() {
       publicId: u.public_id,
       username: u.username,
       avatar: avatars.avatarUrl(Number(u.id)),
+      frame: cosmetics.frameOf(Number(u.id)),
       credits: Number(u.credits),
       rank: rankOf(Number(u.wagered)),
     })),

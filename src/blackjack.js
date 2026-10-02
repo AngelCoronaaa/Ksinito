@@ -14,6 +14,7 @@
 const crypto = require('node:crypto');
 const wallet = require('./wallet');
 const { avatarUrl } = require('./avatars');
+const { frameOf } = require('./cosmetics');
 const { badgeOf } = require('./ranks');
 const { SerialQueue } = require('./queue');
 const { GameError, assertInt } = require('./errors');
@@ -148,6 +149,7 @@ class BlackjackTable {
             userId: s.userId,
             username: s.username,
             avatar: avatarUrl(s.userId),
+            frame: frameOf(s.userId),
             rank: badgeOf(s.userId),
             // Cámara y/o micrófono: `peer` es el socket que emite (los espectadores le piden
             // el vídeo/audio por WebRTC) y `rev` cambia cada vez que enciende o apaga algo.

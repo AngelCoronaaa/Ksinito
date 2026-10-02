@@ -92,6 +92,9 @@ const MIGRATIONS = [
   async function usersCreditsIndex() {
     if (!(await indexExists('users', 'users_credits'))) await query('ALTER TABLE users ADD INDEX users_credits (credits)');
   },
+  async function usersFrame() {
+    if (!(await columnExists('users', 'frame'))) await query('ALTER TABLE users ADD COLUMN frame VARCHAR(32) NULL AFTER wagered');
+  },
 ];
 
 /** Conecta (reintentando mientras MySQL arranca) y crea las tablas que falten. */

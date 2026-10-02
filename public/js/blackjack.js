@@ -215,7 +215,7 @@ window.BlackjackUI = (() => {
       nameRow.append(mic);
     }
     // Si tiene la cámara encendida, su vídeo ocupa el lugar de la foto.
-    plate.append(ctx.media.mount(seat, i === mine) ?? ctx.avatar(seat.username, seat.avatar), nameRow);
+    plate.append(ctx.media.mount(seat, i === mine) ?? ctx.avatar(seat.username, seat.avatar, '', seat.frame), nameRow);
     el.append(plate);
 
     if (seat.hands.length === 0) {

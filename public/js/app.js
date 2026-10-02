@@ -139,8 +139,7 @@
   };
 
   /** Foto de perfil, o la inicial sobre un color propio de cada jugador. */
-  function avatarEl(name, url, extra = '') {
-    const cls = extra ? `avatar ${extra}` : 'avatar';
+  function photoEl(name, url, cls) {
     if (url) {
       const img = document.createElement('img');
       img.className = cls;
@@ -154,15 +153,26 @@
     return el;
   }
 
+  /**
+   * Avatar con su borde de la tienda (`frame`, un id de FramesUI), si tiene. `wings: false` para
+   * sitios estrechos: solo se dibuja el aro.
+   */
+  function avatarEl(name, url, extra = '', frame = null, { wings = true } = {}) {
+    const photo = photoEl(name, url, extra ? `avatar ${extra}` : 'avatar');
+    return window.FramesUI ? window.FramesUI.wrap(photo, frame, { wings }) : photo;
+  }
+
   function setMyAvatar(url) {
     me.avatar = url;
-    for (const [id, extra] of [['avatar', ''], ['profile-avatar', 'avatar-xl']]) {
-      const el = avatarEl(me.username, url, extra);
+    // En la barra de arriba solo cabe el aro; en el perfil, el borde completo.
+    for (const [id, extra, wings] of [['avatar', '', false], ['profile-avatar', 'avatar-xl', true]]) {
+      const el = avatarEl(me.username, url, extra, me.frame, { wings });
       el.id = id;
       el.setAttribute('aria-hidden', 'true');
       $(`#${id}`).replaceWith(el);
     }
     $('#avatar-remove').disabled = !url;
+    window.CosmeticsUI?.refresh();
   }
 
   /** Recorta la imagen en cuadrado y la reduce a 256×256 antes de subirla. */
@@ -410,6 +420,7 @@
       window.DucksUI.setActive(btn.dataset.tab === 'ducks');
       // El ranking solo se pide al servidor mientras está abierto.
       window.RankUI.setActive(btn.dataset.tab === 'leaderboard');
+      window.CosmeticsUI.setActive(btn.dataset.tab === 'cosmetics');
       if (btn.dataset.tab !== 'blackjack') {
         if (btn.dataset.tab === 'roulette') window.RouletteUI.resize();
         window.ChatUI.setChannel('roulette', 'Ruleta'); // patos y ranking no tienen chat propio
@@ -447,6 +458,11 @@
     socket = io();
     socket.on('balance', ({ credits: value }) => setCredits(value));
     socket.on('profile', ({ avatar }) => setMyAvatar(avatar));
+    // Borde equipado (también desde otra pestaña).
+    socket.on('frame', ({ frame }) => {
+      me.frame = frame;
+      setMyAvatar(me.avatar);
+    });
     socket.on('connect_error', (err) => {
       if (err.message === 'unauthorized') location.reload();
     });
@@ -470,6 +486,7 @@
     window.BlackjackUI.init(ctx);
     window.DucksUI.init(ctx);
     window.TriviaUI.init(ctx);
+    window.CosmeticsUI.init(ctx);
   }
 
   api('/api/me').then((data) => startApp(data.user)).catch(showAuth);

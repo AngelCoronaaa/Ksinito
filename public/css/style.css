@@ -1151,7 +1151,7 @@ button.chip:hover { transform: translateY(-3px) rotate(-10deg); }
 /* Chat de voz: micrófono junto al nombre y aro verde mientras habla. */
 .seat-mic { color: var(--win); font-size: .8rem; }
 .seat.speaking .seat-cam,
-.seat.speaking .seat-plate > .avatar { box-shadow: 0 0 0 3px var(--win), 0 0 16px rgba(61, 220, 132, .6); }
+.seat.speaking .seat-plate > .avatar, .seat.speaking .seat-plate > .pf > .avatar { box-shadow: 0 0 0 3px var(--win), 0 0 16px rgba(61, 220, 132, .6); }
 #bj-mic.on { --bs-btn-border-color: rgba(255, 107, 94, .5); --bs-btn-color: #ffb4ac; }
 .camera-mic-switch { display: inline-flex; align-items: center; gap: 8px; margin: 0 auto 18px; color: var(--text); font-size: .9rem; }
 .camera-mic-switch .form-check-input:checked { background-color: var(--gold); border-color: var(--gold); }
@@ -1559,10 +1559,12 @@ button.chat-name:hover { text-decoration: underline; }
   .rw-btn { padding: 0 10px 0 8px; }
   .rw-modal .modal-body { padding: 10px 14px 18px; }
   .rw-actions .btn { flex: 1 1 100%; }
-  .tabs .nav-link { padding: 7px 14px; }
-  /* Con cuatro pestañas no caben los nombres: las inactivas muestran solo su icono. */
+  .tabs { gap: 2px; }
+  .tabs .nav-link { padding: 7px 11px; gap: 6px; }
+  .tabs .nav-link.active span { font-size: .86rem; }
+  /* Con tantas pestañas no caben los nombres: las inactivas muestran solo su icono. */
   .tabs .nav-link:not(.active) span { display: none; }
-  .tabs .nav-link:not(.active) { padding: 7px 12px; }
+  .tabs .nav-link:not(.active) { padding: 7px 9px; }
   .auth-card { padding: 32px 20px 24px; }
   .bj-seats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .seat { min-height: 0; }
@@ -2028,4 +2030,121 @@ button.chat-name:hover { text-decoration: underline; }
   }
   .tv-bet .chips::-webkit-scrollbar { display: none; }
   .tv-bet .chip { flex-shrink: 0; }
+}
+
+/* ---------- bordes de perfil (cosméticos, js/frames.js) ---------- */
+/* El borde envuelve al avatar y toma su tamaño; las capas (alas, aro, brillo, órbita, aura) van
+   encima o debajo con posiciones en % del avatar. Solo se animan transform y opacity. */
+.pf {
+  --pf-k: 1; /* tamaño de las alas respecto al avatar */
+  --pf-flap: 4deg;
+  --pf-flap-dur: 2.8s;
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  isolation: isolate;
+  vertical-align: middle;
+}
+.pf > .avatar { position: relative; z-index: 2; border-color: transparent; }
+.pf-art { position: absolute; pointer-events: none; overflow: visible; }
+.pf-box { left: -20%; top: -35%; width: 140%; height: 155%; }
+.pf-ring { z-index: 3; }
+.pf-shine { z-index: 4; transform-origin: 50% 54.84%; animation: pfSpin 3.4s linear infinite; }
+.pf-orbit { z-index: 5; transform-origin: 50% 54.84%; animation: pfSpin 11s linear infinite reverse; }
+.pf-wing { z-index: 1; animation: pfFlapR var(--pf-flap-dur) ease-in-out infinite alternate; }
+.pf-wing.l { animation-name: pfFlapL; }
+.pf-wing.low { z-index: 0; animation-direction: alternate-reverse; }
+.pf-aura {
+  position: absolute;
+  inset: -55%;
+  z-index: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--pf-aura) 0, transparent 62%);
+  opacity: .45;
+  pointer-events: none;
+  animation: pfPulse 2.2s ease-in-out infinite alternate;
+}
+.pf-especial { --pf-flap: 7deg; }
+.pf-legendario { --pf-flap: 9deg; --pf-flap-dur: 2.5s; }
+.pf-mitico { --pf-flap: 11deg; --pf-flap-dur: 2.1s; }
+/* Sitios con poco espacio: alas más pequeñas. */
+.seat-plate .pf { --pf-k: .62; margin: 6px 0 2px; }
+.lb-podium .pf { --pf-k: .7; margin-top: 26px; } /* las alas y la corona no tapan la medalla */
+@keyframes pfSpin { to { transform: rotate(360deg); } }
+@keyframes pfPulse { to { opacity: 1; } }
+@keyframes pfFlapR { from { transform: rotate(calc(var(--pf-flap) * .35)); } to { transform: rotate(calc(var(--pf-flap) * -1)); } }
+@keyframes pfFlapL { from { transform: rotate(calc(var(--pf-flap) * -.35)); } to { transform: rotate(var(--pf-flap)); } }
+
+/* ---------- tienda de cosméticos ---------- */
+.cs-preview { display: grid; justify-items: center; gap: 10px; text-align: center; overflow: hidden; }
+.cs-preview .panel-title { justify-self: start; }
+.cs-stage { display: grid; place-items: center; width: 100%; min-height: 250px; padding-top: 40px; }
+.cs-stage .avatar-xl { width: 110px; height: 110px; font-size: 2.8rem; border: 0; box-shadow: 0 14px 34px rgba(0, 0, 0, .5); }
+.cs-name { font-family: var(--font-display); font-size: 1.35rem; font-weight: 700; color: var(--gold-bright); }
+.cs-tier-label { margin-top: -6px; font-size: .74rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.cs-action { min-width: 220px; margin-top: 4px; }
+.cs-hint { font-size: .8rem; max-width: 30ch; }
+.cs-t-basico { --tc: #b9c2cc; }
+.cs-t-especial { --tc: #5fb0ff; }
+.cs-t-legendario { --tc: #f2c14e; }
+.cs-t-mitico { --tc: #ff6adf; }
+.cs-tier-label[class*="cs-t-"] { color: var(--tc); }
+.cs-shop { display: grid; gap: 22px; }
+.cs-group-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid color-mix(in srgb, var(--tc) 35%, transparent); }
+.cs-group-name { margin: 0; font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; color: var(--tc); letter-spacing: .06em; }
+.cs-t-mitico .cs-group-name {
+  background: linear-gradient(90deg, #ff6adf, #ffd36b, #7ad7ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.cs-group-price { color: var(--gold); font-weight: 800; font-variant-numeric: tabular-nums; }
+.cs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.cs-card {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 10px 10px 12px;
+  overflow: hidden;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  background:
+    radial-gradient(120% 80% at 50% 0%, color-mix(in srgb, var(--tc, #fff) 14%, transparent), transparent 70%),
+    rgba(0, 0, 0, .22);
+  color: var(--text);
+  transition: transform .2s var(--ease-out), border-color .2s, box-shadow .2s;
+}
+.cs-card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--tc, #fff) 55%, transparent); }
+.cs-card.selected { border-color: var(--tc, var(--gold)); box-shadow: 0 0 0 1px var(--tc, var(--gold)), 0 10px 26px rgba(0, 0, 0, .35); }
+.cs-card-stage { display: grid; place-items: center; width: 100%; height: 116px; padding-top: 26px; }
+.cs-card .cs-mini { width: 52px; height: 52px; font-size: 1.2rem; }
+.cs-card .pf { --pf-k: .78; }
+.cs-card-name { font-weight: 700; font-size: .9rem; }
+.cs-status { font-size: .74rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.cs-status.price { color: var(--gold); }
+.cs-status.price::before { content: '\F634'; font-family: 'bootstrap-icons'; margin-right: 4px; font-weight: 400; } /* bi-coin */
+.cs-status.mine { color: var(--muted); }
+.cs-status.on { color: var(--win); }
+.cs-card.equipped::after {
+  content: '\F26A'; /* bi-check-circle-fill */
+  position: absolute;
+  top: 8px;
+  right: 9px;
+  font-family: 'bootstrap-icons';
+  color: var(--win);
+}
+.win-card .pf.c-badge { --pf-k: .62; margin: 56px auto 8px; }
+.win-card .cs-celebrate { width: 84px; height: 84px; font-size: 2rem; }
+@media (max-width: 575.98px) {
+  .cs-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .cs-card { padding: 8px 6px 10px; }
+  .cs-card .pf { --pf-k: .6; }
+  .cs-card-stage { height: 96px; padding-top: 20px; }
+  .cs-stage { min-height: 210px; }
+}
+@media (max-width: 389.98px) {
+  /* Pantallas muy estrechas: ni la pestaña activa cabe con su nombre. */
+  .tabs .nav-link.active span { display: none; }
 }

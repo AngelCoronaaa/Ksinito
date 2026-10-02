@@ -282,6 +282,28 @@ fichas se desliza en horizontal.
   Si aun así hay abusos, baja `MAX_BET`, `ANSWER_MS` o los multiplicadores (constantes al
   principio de `src/trivia.js`).
 
+## Cosméticos
+
+- Pestaña **Cosméticos**: bordes de perfil animados con alas metálicas, que se ven alrededor de
+  tu foto en las mesas de blackjack, el chat, el ranking y tu perfil (en el chat, la barra de
+  arriba y las filas del ranking solo el aro, porque las alas no caben).
+- Cuatro niveles, tres bordes en cada uno:
+
+  | Nivel | Precio | Bordes | Qué tiene |
+  |---|---|---|---|
+  | Básico | 12.000 | Alas de Hierro, de Bronce, de Plata | Aro de metal y alas pequeñas que se mecen |
+  | Especial | 16.000 | Acero Azul, Jade Imperial, Cobre Ardiente | Alas más grandes con remaches, aleteo |
+  | Legendario | 20.000 | Corona de Oro, Zafiro Real, Amatista Arcana | Doble capa de plumas, gemas y aura que late |
+  | Mítico | 30.000 | Fénix, Dragón de Obsidiana, Serafín | Dos pares de alas, corona / cuernos / halo y chispas en órbita |
+
+- Al pulsar un borde se ve en grande con tu foto. Comprar pide un segundo clic para confirmar,
+  y el borde se equipa al comprarlo. Puedes cambiar entre los que tengas o quitártelo.
+- Comprar **no cuenta como apuesta** (no sube el rango). Cada compra queda en el registro de
+  movimientos (`cosmetic:<id>`) y en `user_cosmetics`; el borde equipado, en `users.frame`.
+- Para añadir un borde: su id, nombre y nivel en `FRAMES` de `src/cosmetics.js` (el precio sale
+  del nivel) y su dibujo, con el mismo id, en `FRAMES` de `public/js/frames.js`. `npm test`
+  comprueba que estén los dos.
+
 ## Límite de cuentas
 
 - Solo limita **crear** cuentas; entrar con una existente funciona siempre.
@@ -335,6 +357,7 @@ src/
   trivia.js     Trivia: partidas, ruleta de categorías, preguntas, tiempos y pago
   trivia-questions.js  Preguntas propias de la trivia, por categoría
   trivia-questions-opentdb.js  Preguntas de Open Trivia DB traducidas (CC BY-SA 4.0)
+  cosmetics.js  Tienda de bordes de perfil: catálogo, precios, compra y borde equipado
   env.js        Lectura y validación de variables de entorno numéricas
 public/         Cliente: Bootstrap 5 + Bootstrap Icons, JS sin frameworks y sin build.
                 Bootstrap, iconos, fuentes (Inter, Cinzel) y canvas-confetti se sirven
@@ -343,5 +366,7 @@ public/         Cliente: Bootstrap 5 + Bootstrap Icons, JS sin frameworks y sin 
   js/ducks.js   Juego de patos en el navegador (canvas, sonidos, marcador)
   js/duck-path.js  Trayectoria de los patos (módulo ESM que usan el navegador y el servidor)
   js/trivia.js  Trivia en el navegador (ruleta de categorías, preguntas, resultado)
+  js/frames.js  Dibujo de los bordes de perfil (SVG con alas metálicas, animados)
+  js/cosmetics.js  Pestaña de la tienda de cosméticos
 test/           Pruebas (npm test, con node:test)
 ```

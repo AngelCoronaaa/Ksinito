@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS users (
   credits               BIGINT          NOT NULL DEFAULT 0,
   -- Total apostado (apuestas menos reembolsos); decide el rango del jugador (src/ranks.js).
   wagered               BIGINT          NOT NULL DEFAULT 0,
+  -- Borde de perfil equipado (id de src/cosmetics.js), o NULL.
+  frame                 VARCHAR(32)     NULL,
   welcome_bonus_granted TINYINT(1)      NOT NULL DEFAULT 0,
   created_at            BIGINT          NOT NULL,
   PRIMARY KEY (id),
@@ -172,4 +174,14 @@ CREATE TABLE IF NOT EXISTS trivia_seen (
   question_id VARCHAR(32)     CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   seen_at     BIGINT          NOT NULL,
   PRIMARY KEY (user_id, question_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Cosméticos comprados (bordes de perfil, src/cosmetics.js). La clave primaria impide
+-- comprar dos veces el mismo; el equipado se guarda en users.frame.
+CREATE TABLE IF NOT EXISTS user_cosmetics (
+  user_id      BIGINT UNSIGNED NOT NULL,
+  item_id      VARCHAR(32)     NOT NULL,
+  price        BIGINT          NOT NULL,
+  purchased_at BIGINT          NOT NULL,
+  PRIMARY KEY (user_id, item_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

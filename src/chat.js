@@ -6,6 +6,7 @@
 
 const { query } = require('./db');
 const avatars = require('./avatars');
+const cosmetics = require('./cosmetics');
 const ranks = require('./ranks');
 const { GameError } = require('./errors');
 
@@ -36,6 +37,7 @@ const toMessage = (row) => ({
   publicId: row.public_id,
   username: row.username,
   avatar: avatars.avatarUrl(Number(row.user_id)),
+  frame: cosmetics.frameOf(Number(row.user_id)),
   // Historial: el rango sale de la consulta; mensaje nuevo: de la caché de ranks.
   rank: row.wagered === undefined ? ranks.badgeOf(Number(row.user_id)) : ranks.rankOf(Number(row.wagered)),
   text: row.text,

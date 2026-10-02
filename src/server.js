@@ -13,6 +13,7 @@ const ranks = require('./ranks');
 const ads = require('./ads');
 const ducks = require('./ducks');
 const trivia = require('./trivia');
+const cosmetics = require('./cosmetics');
 const chat = require('./chat');
 const db = require('./db');
 const { SerialQueue } = require('./queue');
@@ -67,6 +68,7 @@ app.use('/api', transfers.router);
 app.use('/api', ranks.router);
 app.use('/api', ads.router);
 app.use('/api', ducks.router);
+app.use('/api', cosmetics.router);
 
 // CSS/JS con ?v=<versión> (ver ASSETS_VERSION abajo) se cachean un año: la URL cambia en
 // cada deploy. Sin versión: el código propio se revalida siempre y las librerías (fuentes e
@@ -209,6 +211,12 @@ wallet.events.on('balance', (userId, credits) => io.to(`user:${userId}`).emit('b
 // Al cambiar la foto se avisa a sus pestañas y, si está sentado, a toda la mesa.
 avatars.events.on('change', (userId, avatar) => {
   io.to(`user:${userId}`).emit('profile', { avatar });
+  tableOf(userId)?.broadcast();
+});
+
+// Al equipar o quitar un borde se avisa a sus pestañas y, si está sentado, a toda la mesa.
+cosmetics.events.on('change', (userId, frame) => {
+  io.to(`user:${userId}`).emit('frame', { frame });
   tableOf(userId)?.broadcast();
 });
 
@@ -388,6 +396,7 @@ async function main() {
   await db.init(); // conecta y crea las tablas de db/schema.sql si faltan
   await auth.init();
   await avatars.init();
+  await cosmetics.init();
   roulette = await RouletteGame.create(io);
   await ducks.init(io);
   await trivia.init(io);

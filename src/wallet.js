@@ -59,10 +59,13 @@ async function apply(userId, delta, reason, sql, params, tx = null) {
   return balance;
 }
 
-/** Resta créditos. Devuelve el nuevo saldo, o null si no alcanza. */
-function debit(userId, amount, reason) {
+/**
+ * Resta créditos (compras de la tienda, p. ej.: no cuentan como apuesta). Devuelve el nuevo
+ * saldo, o null si no alcanza. `tx` (opcional): como en credit().
+ */
+function debit(userId, amount, reason, tx = null) {
   assertAmount(amount);
-  return apply(userId, -amount, reason, SQL.debit, [amount, userId, amount]);
+  return apply(userId, -amount, reason, SQL.debit, [amount, userId, amount], tx);
 }
 
 /**

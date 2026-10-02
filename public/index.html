@@ -68,6 +68,7 @@
           <button type="button" data-tab="blackjack" class="nav-link"><i class="bi bi-suit-club-fill"></i><span>Blackjack</span></button>
           <button type="button" data-tab="ducks" class="nav-link hidden"><i class="bi bi-crosshair"></i><span>Patos</span></button>
           <button type="button" data-tab="trivia" class="nav-link"><i class="bi bi-patch-question-fill"></i><span>Trivia</span></button>
+          <button type="button" data-tab="cosmetics" class="nav-link"><i class="bi bi-gem"></i><span>Cosméticos</span></button>
           <button type="button" data-tab="leaderboard" class="nav-link"><i class="bi bi-trophy-fill"></i><span>Ranking</span></button>
         </nav>
         <div class="user-box">
@@ -300,6 +301,26 @@
         <p class="rules tv-credit">Parte de las preguntas son de <a href="https://opentdb.com" target="_blank" rel="noopener">Open Trivia DB</a>, traducidas y adaptadas · <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.es" target="_blank" rel="noopener">CC BY-SA 4.0</a></p>
       </section>
 
+      <!-- Cosméticos: bordes de perfil con alas metálicas -->
+      <section id="cosmetics" class="game hidden">
+        <div class="row g-4 align-items-start">
+          <div class="col-lg-4">
+            <div class="glass-panel cs-preview">
+              <h3 class="panel-title">Vista previa</h3>
+              <div id="cs-stage" class="cs-stage"></div>
+              <div id="cs-name" class="cs-name"></div>
+              <div id="cs-tier" class="cs-tier-label"></div>
+              <button type="button" id="cs-action" class="btn btn-gold cs-action" disabled></button>
+              <button type="button" id="cs-unequip" class="btn btn-glass btn-sm hidden"><i class="bi bi-x-circle me-1"></i>Quitar mi borde</button>
+              <p class="hint cs-hint">Tu borde se ve alrededor de tu foto en las mesas, el chat y el ranking.</p>
+            </div>
+          </div>
+          <div class="col-lg-8">
+            <div id="cs-shop" class="cs-shop"><p class="hint">Cargando la tienda…</p></div>
+          </div>
+        </div>
+      </section>
+
       <!-- Ranking -->
       <section id="leaderboard" class="game hidden">
         <div class="row g-4">
@@ -502,6 +523,7 @@
   <script src="/socket.io/socket.io.js"></script>
   <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
   <script src="/vendor/confetti/confetti.browser.js"></script>
+  <script src="/js/frames.js"></script>
   <script src="/js/roulette.js"></script>
   <script src="/js/blackjack.js"></script>
   <script src="/js/ranks.js"></script>
@@ -511,6 +533,7 @@
   <script src="/js/media.js"></script>
   <script src="/js/ducks.js"></script>
   <script src="/js/trivia.js"></script>
+  <script src="/js/cosmetics.js"></script>
   <script src="/js/app.js"></script>
 </body>
 </html>
