@@ -301,7 +301,7 @@ body::before {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 18px;
+  padding: 8px 14px;
   font-weight: 600;
   transition: background-color .25s, color .25s, box-shadow .25s;
 }
@@ -362,7 +362,22 @@ body::before {
 }
 .user-chip:hover { background: rgba(255, 255, 255, .06); border-color: var(--gold-soft); }
 .user-chip:hover .avatar { box-shadow: 0 0 0 2px var(--gold); }
-.username { color: var(--muted); font-weight: 600; font-size: .9rem; }
+.username { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-weight: 600; font-size: .9rem; }
+.user-chip { min-width: 0; }
+/* En PC, logo, pestañas y usuario siempre en una sola fila. */
+@media (min-width: 992px) {
+  .topbar .container-xl { flex-wrap: nowrap; }
+  .tabs { flex-wrap: nowrap; flex-shrink: 0; }
+  .user-box { min-width: 0; }
+}
+/* Tabletas y pantallas medianas: las pestañas inactivas solo con su icono (el nombre sale al pasar el ratón). */
+@media (min-width: 576px) and (max-width: 1399.98px) {
+  .tabs .nav-link:not(.active) span { display: none; }
+  .tabs .nav-link:not(.active) { padding: 8px 12px; }
+}
+@media (min-width: 992px) and (max-width: 1199.98px) {
+  .username { display: none; }
+}
 .avatar {
   width: 34px;
   height: 34px;
@@ -1519,6 +1534,8 @@ button.chat-name:hover { text-decoration: underline; }
     transition-duration: .01ms !important;
   }
   .float-item, .win-rays { display: none; }
+  /* Bordes: lo que solo aparece a destellos se queda visible y quieto. */
+  .pfa-flash, .pfa-twinkle, .pfa-neon { animation: none !important; }
   /* El anuncio de victoria se muestra quieto; app.js lo oculta al terminar. */
   .celebrate.show, .celebrate.show .win-card { animation: none; opacity: 1; }
 }
@@ -2075,6 +2092,29 @@ button.chat-name:hover { text-decoration: underline; }
 @keyframes pfPulse { to { opacity: 1; } }
 @keyframes pfFlapR { from { transform: rotate(calc(var(--pf-flap) * .35)); } to { transform: rotate(calc(var(--pf-flap) * -1)); } }
 @keyframes pfFlapL { from { transform: rotate(calc(var(--pf-flap) * -.35)); } to { transform: rotate(var(--pf-flap)); } }
+/* Animaciones de las capas de los demás tipos de borde (js/frames.js, layer()): duración --d,
+   retraso --dl, ángulo --a, escalas --s0/--s1. El punto de giro lo pone cada capa. */
+.pfa-spin, .pfa-spin-rev, .pfa-sway, .pfa-breath, .pfa-pulse, .pfa-twinkle, .pfa-twitch, .pfa-neon, .pfa-flash {
+  animation-duration: var(--d, 3s);
+  animation-delay: var(--dl, 0s);
+  animation-iteration-count: infinite;
+}
+.pfa-spin { animation-name: pfSpin; animation-timing-function: linear; }
+.pfa-spin-rev { animation-name: pfSpin; animation-timing-function: linear; animation-direction: reverse; }
+.pfa-sway { animation-name: pfSway; animation-timing-function: ease-in-out; animation-direction: alternate; }
+.pfa-breath { animation-name: pfBreath; animation-timing-function: ease-in-out; animation-direction: alternate; }
+.pfa-pulse { animation-name: pfPulse2; animation-timing-function: ease-in-out; animation-direction: alternate; }
+.pfa-twinkle { animation-name: pfTwinkle; animation-timing-function: ease-in-out; }
+.pfa-twitch { animation-name: pfTwitch; animation-timing-function: ease-in-out; }
+.pfa-neon { animation-name: pfNeon; animation-timing-function: linear; }
+.pfa-flash { animation-name: pfFlash; animation-timing-function: linear; }
+@keyframes pfSway { from { transform: rotate(calc(var(--a, 3deg) * -1)); } to { transform: rotate(var(--a, 3deg)); } }
+@keyframes pfBreath { from { transform: scale(var(--s0, .96)); } to { transform: scale(var(--s1, 1.04)); } }
+@keyframes pfPulse2 { from { opacity: .45; } to { opacity: 1; } }
+@keyframes pfTwinkle { 0%, 100% { opacity: 0; transform: scale(.3) rotate(0deg); } 50% { opacity: 1; transform: scale(1) rotate(45deg); } }
+@keyframes pfTwitch { 0%, 84%, 100% { transform: rotate(0deg); } 88% { transform: rotate(var(--a, -10deg)); } 92% { transform: rotate(0deg); } 95% { transform: rotate(var(--a, -10deg)); } }
+@keyframes pfNeon { 0%, 89%, 93%, 100% { opacity: 1; } 90% { opacity: .3; } 91.5% { opacity: .9; } 92.2% { opacity: .4; } }
+@keyframes pfFlash { 0%, 30%, 100% { opacity: 0; } 4% { opacity: 1; } 8% { opacity: .25; } 12% { opacity: 1; } 20% { opacity: .6; } }
 
 /* ---------- tienda de cosméticos ---------- */
 .cs-preview { display: grid; justify-items: center; gap: 10px; text-align: center; overflow: hidden; }
@@ -2100,7 +2140,7 @@ button.chat-name:hover { text-decoration: underline; }
   color: transparent;
 }
 .cs-group-price { color: var(--gold); font-weight: 800; font-variant-numeric: tabular-nums; }
-.cs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.cs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; } /* 3 por fila en PC: 6 bordes por nivel = 2 filas */
 .cs-card {
   position: relative;
   display: grid;

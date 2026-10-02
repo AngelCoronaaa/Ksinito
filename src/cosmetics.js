@@ -1,6 +1,6 @@
 'use strict';
 
-// Tienda de cosméticos: bordes de perfil animados (con alas metálicas) que se compran con
+// Tienda de cosméticos: bordes de perfil animados (alas, escudos, llamas, galaxias…) que se compran con
 // créditos y se ven alrededor de la foto en las mesas, el chat y el ranking. Comprar no
 // cuenta como apuesta (no sube el rango): es wallet.debit(), con su asiento "cosmetic:<id>".
 //
@@ -22,16 +22,29 @@ const TIERS = [
 ];
 const TIER_BY_ID = new Map(TIERS.map((t) => [t.id, t]));
 
+// Los ids no se cambian nunca: son los que quedan guardados en las compras.
 const FRAMES = [
+  { id: 'hexagono', name: 'Hexágono de Acero', tier: 'basico' },
+  { id: 'laurel', name: 'Laurel de Bronce', tier: 'basico' },
+  { id: 'engranaje', name: 'Engranaje de Cobre', tier: 'basico' },
   { id: 'hierro', name: 'Alas de Hierro', tier: 'basico' },
   { id: 'bronce', name: 'Alas de Bronce', tier: 'basico' },
   { id: 'plata', name: 'Alas de Plata', tier: 'basico' },
+  { id: 'escudo', name: 'Escudo de Caballero', tier: 'especial' },
+  { id: 'loto', name: 'Loto de Jade', tier: 'especial' },
+  { id: 'neon', name: 'Neón Felino', tier: 'especial' },
   { id: 'acero', name: 'Acero Azul', tier: 'especial' },
   { id: 'jade', name: 'Jade Imperial', tier: 'especial' },
   { id: 'cobre', name: 'Cobre Ardiente', tier: 'especial' },
+  { id: 'tormenta', name: 'Tormenta Eléctrica', tier: 'legendario' },
+  { id: 'llamas', name: 'Llamas Infernales', tier: 'legendario' },
+  { id: 'hielo', name: 'Corona de Hielo', tier: 'legendario' },
   { id: 'oro', name: 'Corona de Oro', tier: 'legendario' },
   { id: 'zafiro', name: 'Zafiro Real', tier: 'legendario' },
   { id: 'amatista', name: 'Amatista Arcana', tier: 'legendario' },
+  { id: 'dragon', name: 'Dragón Carmesí', tier: 'mitico' },
+  { id: 'galaxia', name: 'Galaxia', tier: 'mitico' },
+  { id: 'sol', name: 'Sol Eterno', tier: 'mitico' },
   { id: 'fenix', name: 'Fénix', tier: 'mitico' },
   { id: 'obsidiana', name: 'Dragón de Obsidiana', tier: 'mitico' },
   { id: 'serafin', name: 'Serafín', tier: 'mitico' },

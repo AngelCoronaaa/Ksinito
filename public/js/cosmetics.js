@@ -62,7 +62,7 @@ window.CosmeticsUI = (() => {
       const sure = confirming?.id === frame.id;
       const short = (ctx.credits() ?? 0) < frame.price;
       btn.disabled = busy || short;
-      btn.classList.add(sure ? 'btn-danger' : 'btn-gold');
+      btn.classList.add(sure ? 'btn-danger' : short ? 'btn-glass' : 'btn-gold');
       btn.innerHTML = sure
         ? `<i class="bi bi-exclamation-circle me-1"></i>Confirmar: ${fmt(frame.price)}`
         : `<i class="bi bi-coin me-1"></i>${short ? 'Te faltan créditos' : 'Comprar'} · ${fmt(frame.price)}`;

@@ -284,25 +284,26 @@ fichas se desliza en horizontal.
 
 ## Cosméticos
 
-- Pestaña **Cosméticos**: bordes de perfil animados con alas metálicas, que se ven alrededor de
-  tu foto en las mesas de blackjack, el chat, el ranking y tu perfil (en el chat, la barra de
-  arriba y las filas del ranking solo el aro, porque las alas no caben).
-- Cuatro niveles, tres bordes en cada uno:
+- Pestaña **Cosméticos**: bordes de perfil animados que se ven alrededor de tu foto en las mesas
+  de blackjack, el chat, el ranking y tu perfil (en el chat, la barra de arriba y las filas del
+  ranking solo el aro, porque los adornos no caben).
+- Cuatro niveles, seis bordes en cada uno: tres con formas propias y tres con alas metálicas.
 
-  | Nivel | Precio | Bordes | Qué tiene |
+  | Nivel | Precio | Formas | Alas |
   |---|---|---|---|
-  | Básico | 12.000 | Alas de Hierro, de Bronce, de Plata | Aro de metal y alas pequeñas que se mecen |
-  | Especial | 16.000 | Acero Azul, Jade Imperial, Cobre Ardiente | Alas más grandes con remaches, aleteo |
-  | Legendario | 20.000 | Corona de Oro, Zafiro Real, Amatista Arcana | Doble capa de plumas, gemas y aura que late |
-  | Mítico | 30.000 | Fénix, Dragón de Obsidiana, Serafín | Dos pares de alas, corona / cuernos / halo y chispas en órbita |
+  | Básico | 12.000 | Hexágono de Acero (marco hexagonal), Laurel de Bronce (corona de laurel con lazo), Engranaje de Cobre (engranaje que gira) | Alas de Hierro, de Bronce, de Plata |
+  | Especial | 16.000 | Escudo de Caballero (escudo con espadas cruzadas), Loto de Jade (pétalos que respiran), Neón Felino (orejas y bigotes de gato en neón) | Acero Azul, Jade Imperial, Cobre Ardiente |
+  | Legendario | 20.000 | Tormenta Eléctrica (rayos que destellan), Llamas Infernales (fuego que baila), Corona de Hielo (cristales y escarcha) | Corona de Oro, Zafiro Real, Amatista Arcana |
+  | Mítico | 30.000 | Dragón Carmesí (alas de murciélago, cuernos y cola), Galaxia (nebulosa y planetas en órbita), Sol Eterno (rayos de sol que giran) | Fénix, Dragón de Obsidiana, Serafín |
 
 - Al pulsar un borde se ve en grande con tu foto. Comprar pide un segundo clic para confirmar,
   y el borde se equipa al comprarlo. Puedes cambiar entre los que tengas o quitártelo.
 - Comprar **no cuenta como apuesta** (no sube el rango). Cada compra queda en el registro de
   movimientos (`cosmetic:<id>`) y en `user_cosmetics`; el borde equipado, en `users.frame`.
 - Para añadir un borde: su id, nombre y nivel en `FRAMES` de `src/cosmetics.js` (el precio sale
-  del nivel) y su dibujo, con el mismo id, en `FRAMES` de `public/js/frames.js`. `npm test`
-  comprueba que estén los dos.
+  del nivel) y su dibujo, con el mismo id, en `FRAMES` de `public/js/frames.js` (con alas, o con
+  un `kind` que tenga su función en `BUILDERS`). `npm test` comprueba que estén los dos. Los ids
+  no se cambian nunca: son los que quedan guardados en las compras.
 
 ## Límite de cuentas
 
