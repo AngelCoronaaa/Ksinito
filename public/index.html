@@ -68,7 +68,6 @@
           <button type="button" data-tab="blackjack" title="Blackjack" class="nav-link"><i class="bi bi-suit-club-fill"></i><span>Blackjack</span></button>
           <button type="button" data-tab="ducks" title="Patos" class="nav-link hidden"><i class="bi bi-crosshair"></i><span>Patos</span></button>
           <button type="button" data-tab="trivia" title="Trivia" class="nav-link"><i class="bi bi-patch-question-fill"></i><span>Trivia</span></button>
-          <button type="button" data-tab="cosmetics" title="Cosméticos" class="nav-link"><i class="bi bi-gem"></i><span>Cosméticos</span></button>
           <button type="button" data-tab="leaderboard" title="Ranking" class="nav-link"><i class="bi bi-trophy-fill"></i><span>Ranking</span></button>
         </nav>
         <div class="user-box">
@@ -194,7 +193,7 @@
           <button type="button" id="bj-sound" class="btn btn-glass btn-sm hidden"><i class="bi bi-volume-mute me-1"></i>Silenciar mesa</button>
           <button type="button" id="bj-leave" class="btn btn-glass btn-sm hidden"><i class="bi bi-box-arrow-left me-1"></i>Levantarse</button>
         </div>
-        <p class="rules">5 mesas de 15 jugadores · 8 barajas · El crupier se planta en 17 · Blackjack paga 3:2 · Doblar con 2 cartas · Dividir una vez</p>
+        <p class="rules">3 mesas públicas de 15 jugadores · Con el <strong>+</strong> creas una sala de 2 a 15 jugadores con su código · 8 barajas · El crupier se planta en 17 · Blackjack paga 3:2 · Doblar con 2 cartas · Dividir una vez</p>
       </section>
 
       <!-- Patos: minijuego individual y gratis; cada pato derribado da créditos -->
@@ -301,8 +300,12 @@
         <p class="rules tv-credit">Parte de las preguntas son de <a href="https://opentdb.com" target="_blank" rel="noopener">Open Trivia DB</a>, traducidas y adaptadas · <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.es" target="_blank" rel="noopener">CC BY-SA 4.0</a></p>
       </section>
 
-      <!-- Cosméticos: bordes de perfil con alas metálicas -->
+      <!-- Cosméticos: se abre desde el perfil (botón "Cosméticos"), no tiene pestaña -->
       <section id="cosmetics" class="game hidden">
+        <div class="cs-head">
+          <button type="button" id="cs-back" class="btn btn-glass btn-sm"><i class="bi bi-arrow-left me-1"></i>Volver</button>
+          <h2 class="cs-title"><i class="bi bi-gem me-2"></i>Cosméticos</h2>
+        </div>
         <div class="row g-4 align-items-start">
           <div class="col-lg-4">
             <div class="glass-panel cs-preview">
@@ -381,7 +384,46 @@
               <label for="avatar-input" class="btn btn-gold"><i class="bi bi-upload me-1"></i>Subir foto</label>
               <button type="button" id="avatar-remove" class="btn btn-glass"><i class="bi bi-trash3 me-1"></i>Quitar foto</button>
             </div>
+            <button type="button" id="profile-cosmetics" class="profile-cosmetics">
+              <span class="pc-icon"><i class="bi bi-gem"></i></span>
+              <span class="pc-text"><strong>Cosméticos</strong><small>Bordes animados para tu foto</small></span>
+              <i class="bi bi-chevron-right pc-arrow"></i>
+            </button>
             <p id="profile-error" class="error mb-0 mt-3" role="alert"></p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Salas personalizadas de blackjack: crear (2 a 15 jugadores) o entrar con el código -->
+    <div class="modal fade" id="room-modal" tabindex="-1" aria-labelledby="room-title" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content profile-modal">
+          <div class="modal-header border-0 pb-0">
+            <h2 class="modal-title panel-title" id="room-title"><i class="bi bi-door-open-fill me-1"></i>Salas personalizadas</h2>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          </div>
+          <div class="modal-body rm-body">
+            <section class="rm-block">
+              <h3 class="rm-title">Crear sala</h3>
+              <label for="rm-seats" class="rm-sub">¿Cuántos jugadores?</label>
+              <div class="rm-range">
+                <input type="range" id="rm-seats" class="form-range" min="2" max="15" value="6">
+                <output id="rm-seats-out" for="rm-seats" class="rm-out">6 jugadores</output>
+              </div>
+              <div id="rm-preview" class="rm-preview" aria-hidden="true"></div>
+              <button type="button" id="rm-create" class="btn btn-gold w-100"><i class="bi bi-plus-circle me-1"></i>Crear sala</button>
+              <p class="rm-note">Tendrá un código de 4 caracteres para compartir. Se cierra sola cuando se queda vacía.</p>
+            </section>
+            <div class="rm-or"><span>o</span></div>
+            <form id="rm-join" class="rm-block" novalidate>
+              <h3 class="rm-title">Unirse con código</h3>
+              <div class="rm-join-row">
+                <input id="rm-code" class="form-control rm-code" maxlength="4" placeholder="ABCD" autocomplete="off" spellcheck="false" aria-label="Código de la sala">
+                <button type="submit" class="btn btn-glass"><i class="bi bi-box-arrow-in-right me-1"></i>Entrar</button>
+              </div>
+            </form>
+            <p id="rm-error" class="error mb-0 mt-2" role="alert"></p>
           </div>
         </div>
       </div>

@@ -67,10 +67,15 @@ async function post(user, channel, text) {
   return toMessage({ id, channel, user_id: user.id, text: clean, created_at: now, username: user.username, public_id: user.publicId });
 }
 
+/** Borra el historial de un canal (al cerrarse una sala personalizada). */
+async function purge(channel) {
+  await query('DELETE FROM chat_messages WHERE channel = ?', [channel]);
+}
+
 // Limpia la memoria de jugadores que ya no escriben.
 setInterval(() => {
   const now = Date.now();
   for (const [userId, times] of recentByUser) if (times.every((t) => now - t >= BURST_MS)) recentByUser.delete(userId);
 }, 60_000).unref();
 
-module.exports = { history, post, MAX_LENGTH };
+module.exports = { history, post, MAX_LENGTH, purge };

@@ -403,33 +403,52 @@
 
   // ---------- pestañas ----------
 
-  document.querySelectorAll('.tabs button').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      if (btn.classList.contains('active')) return;
-      document.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('active', b === btn));
-      document.querySelectorAll('.game').forEach((g) => {
-        const show = g.id === btn.dataset.tab;
-        g.classList.toggle('hidden', !show);
-        g.classList.remove('game-enter');
-        if (show) {
-          void g.offsetWidth;
-          g.classList.add('game-enter');
-        }
-      });
-      // El juego de patos solo dibuja mientras se ve (su ronda sigue en el servidor igualmente).
-      window.DucksUI.setActive(btn.dataset.tab === 'ducks');
-      // El ranking solo se pide al servidor mientras está abierto.
-      window.RankUI.setActive(btn.dataset.tab === 'leaderboard');
-      window.CosmeticsUI.setActive(btn.dataset.tab === 'cosmetics');
-      if (btn.dataset.tab !== 'blackjack') {
-        if (btn.dataset.tab === 'roulette') window.RouletteUI.resize();
-        window.ChatUI.setChannel('roulette', 'Ruleta'); // patos y ranking no tienen chat propio
-      } else {
-        const { channel, label } = window.BlackjackUI.chatChannel();
-        window.ChatUI.setChannel(channel, label);
+  let currentView = 'roulette';
+  let previousView = 'roulette';
+
+  /**
+   * Muestra una sección (`.game` con ese id). Las pestañas llevan a los juegos y al ranking;
+   * los cosméticos no tienen pestaña: se abren desde el perfil.
+   */
+  function showView(view) {
+    if (view === currentView) return;
+    previousView = currentView;
+    currentView = view;
+    document.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === view));
+    document.querySelectorAll('.game').forEach((g) => {
+      const show = g.id === view;
+      g.classList.toggle('hidden', !show);
+      g.classList.remove('game-enter');
+      if (show) {
+        void g.offsetWidth;
+        g.classList.add('game-enter');
       }
     });
+    // El juego de patos solo dibuja mientras se ve (su ronda sigue en el servidor igualmente).
+    window.DucksUI.setActive(view === 'ducks');
+    // El ranking solo se pide al servidor mientras está abierto.
+    window.RankUI.setActive(view === 'leaderboard');
+    window.CosmeticsUI.setActive(view === 'cosmetics');
+    if (view !== 'blackjack') {
+      if (view === 'roulette') window.RouletteUI.resize();
+      window.ChatUI.setChannel('roulette', 'Ruleta'); // patos, trivia, ranking y cosméticos no tienen chat propio
+    } else {
+      const { channel, label } = window.BlackjackUI.chatChannel();
+      window.ChatUI.setChannel(channel, label);
+    }
+  }
+
+  document.querySelectorAll('.tabs button').forEach((btn) => {
+    btn.addEventListener('click', () => showView(btn.dataset.tab));
   });
+
+  // Perfil → Cosméticos (cierra el perfil y abre la tienda); "Volver" regresa a donde estabas.
+  $('#profile-cosmetics').addEventListener('click', () => {
+    window.bootstrap.Modal.getOrCreateInstance($('#profile-modal')).hide();
+    showView('cosmetics');
+    window.scrollTo({ top: 0 });
+  });
+  $('#cs-back').addEventListener('click', () => showView(previousView === 'cosmetics' ? 'roulette' : previousView));
 
   document.querySelectorAll('[data-copy-id]').forEach((btn) => {
     btn.addEventListener('click', async () => {

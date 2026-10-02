@@ -26,7 +26,12 @@ const { BlackjackTable } = require('./blackjack');
 const PORT = Number(process.env.PORT) || 3000;
 const LEAVE_GRACE_MS = 20_000; // tiempo para recargar la página sin perder el asiento
 const EVENTS_PER_SECOND = 15;
-const BLACKJACK_TABLES = 5;
+const BLACKJACK_TABLES = 3; // mesas públicas (1, 2 y 3); el resto son salas personalizadas
+const ROOM_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sin 0/O ni 1/I, que se confunden
+const ROOM_CODE_RE = /^[A-Z0-9]{4}$/;
+const ROOM_SEATS = { min: 2, max: 15 };
+const MAX_ROOMS = 100; // salas abiertas a la vez en todo el servidor
+const ROOM_IDLE_MS = 2 * 60_000; // sin nadie sentado ni mirando este tiempo, la sala se cierra
 const RTC_SIGNALS_PER_SECOND = 60; // candidatos ICE de varias cámaras a la vez
 
 // Servidores STUN/TURN para cámaras y chat de voz (WebRTC). Con solo STUN, algunas redes (datos
@@ -133,7 +138,7 @@ let roulette = null; // se crea en main(), tras conectar a MySQL
 // no enviarlo en cada carta repartida.
 let lobbyTimer = null;
 let lastLobby = '';
-const lobbyState = () => [...tables.values()].map((t) => t.summary());
+const lobbyState = () => [...tables.values()].map((t) => t.summary()); // solo las públicas
 function scheduleLobby() {
   if (lobbyTimer) return;
   lobbyTimer = setTimeout(() => {
@@ -149,13 +154,95 @@ function scheduleLobby() {
 const tables = new Map();
 for (let id = 1; id <= BLACKJACK_TABLES; id++) tables.set(id, new BlackjackTable(io, id, { onChange: scheduleLobby }));
 
+// ---------- salas personalizadas ----------
+// Las crea un jugador eligiendo de 2 a 15 sillas y tienen un código de 4 caracteres. No salen
+// en el resumen público: se entra con el código, y a partir de ahí la sala aparece en la lista
+// de ese jugador (sus "miembros" reciben `bj:rooms`). Viven en memoria y se cierran solas cuando
+// llevan ROOM_IDLE_MS sin nadie sentado ni mirando.
+const rooms = new Map(); // código -> { code, table, owner, members: Set<userId>, idleSince }
+
+/** Todas las mesas: las públicas y las salas. */
+function* allTables() {
+  yield* tables.values();
+  for (const room of rooms.values()) yield room.table;
+}
+
+const roomSummaries = (userId) =>
+  [...rooms.values()].filter((r) => r.members.has(userId)).map((r) => ({ ...r.table.summary(), owner: r.owner === userId }));
+const sendRooms = (userId) => io.to(`user:${userId}`).emit('bj:rooms', roomSummaries(userId));
+
+// Cambios en una sala (alguien se sienta, cambia la fase…): a sus miembros, agrupados.
+const pendingRooms = new Set();
+let roomsTimer = null;
+function scheduleRooms(room) {
+  pendingRooms.add(room);
+  roomsTimer ??= setTimeout(() => {
+    roomsTimer = null;
+    const users = new Set([...pendingRooms].flatMap((r) => [...r.members]));
+    pendingRooms.clear();
+    for (const userId of users) sendRooms(userId);
+  }, 150);
+}
+
+function newRoomCode() {
+  for (;;) {
+    const code = Array.from({ length: 4 }, () => ROOM_CODE_CHARS[crypto.randomInt(ROOM_CODE_CHARS.length)]).join('');
+    if (!rooms.has(code)) return code;
+  }
+}
+
+function createRoom(userId, seats) {
+  assertInt(seats, ROOM_SEATS.min, ROOM_SEATS.max, 'El número de jugadores');
+  const own = [...rooms.values()].find((r) => r.owner === userId);
+  if (own) throw new GameError(`Ya tienes una sala abierta (${own.code}). Se cierra sola cuando se queda vacía.`);
+  if (rooms.size >= MAX_ROOMS) throw new GameError('Hay demasiadas salas abiertas. Prueba en unos minutos.');
+  const code = newRoomCode();
+  const room = { code, owner: userId, members: new Set([userId]), idleSince: Date.now() };
+  room.table = new BlackjackTable(io, code, { seats, name: `Sala ${code}`, custom: true, onChange: () => scheduleRooms(room) });
+  rooms.set(code, room);
+  sendRooms(userId);
+  return code;
+}
+
+/** Al mirar o sentarse en una sala, el jugador pasa a tenerla en su lista. */
+function joinRoom(table, userId) {
+  const room = table.custom ? rooms.get(table.id) : null;
+  if (!room || room.members.has(userId)) return;
+  room.members.add(userId);
+  sendRooms(userId);
+}
+
+function closeRoom(room) {
+  room.table.clearSchedule();
+  rooms.delete(room.code);
+  for (const userId of room.members) sendRooms(userId);
+  chat.purge(room.table.room).catch((err) => console.error('[salas] Al borrar el chat', err));
+}
+
+setInterval(() => {
+  for (const room of rooms.values()) {
+    const seated = room.table.seats.some(Boolean);
+    const watched = (io.sockets.adapter.rooms.get(room.table.room)?.size ?? 0) > 0;
+    if (seated || watched) room.idleSince = Date.now();
+    else if (Date.now() - room.idleSince >= ROOM_IDLE_MS) closeRoom(room);
+  }
+}, 20_000).unref();
+
+/** Mesa por id: 1-3 (públicas) o el código de 4 caracteres de una sala. */
 function getTable(id) {
+  if (typeof id === 'string') {
+    const code = id.trim().toUpperCase();
+    if (!ROOM_CODE_RE.test(code)) throw new GameError('El código de sala tiene 4 letras o números');
+    const room = rooms.get(code);
+    if (!room) throw new GameError('No existe ninguna sala con ese código');
+    return room.table;
+  }
   return tables.get(assertInt(id, 1, BLACKJACK_TABLES, 'La mesa'));
 }
 
 /** Mesa en la que está sentado el usuario (solo puede estar en una). */
 function tableOf(userId) {
-  for (const table of tables.values()) if (table.seatIndexOf(userId) !== -1) return table;
+  for (const table of allTables()) if (table.seatIndexOf(userId) !== -1) return table;
   return null;
 }
 
@@ -170,7 +257,7 @@ function requireTable(userId) {
  * ella y el otro la está mirando. Sin esto, cualquiera podría escribir a cualquier socket.
  */
 function rtcTableFor(a, b) {
-  for (const table of tables.values()) {
+  for (const table of allTables()) {
     const pubs = table.mediaSockets();
     if ((pubs.includes(a.id) && b.rooms.has(table.room)) || (pubs.includes(b.id) && a.rooms.has(table.room))) return table;
   }
@@ -200,7 +287,7 @@ function cleanSignal(msg) {
 
 /** Avisa a quienes emiten cámara/micrófono de que este socket ya no mira (cierran su conexión con él). */
 function rtcGone(socketId) {
-  for (const table of tables.values()) {
+  for (const table of allTables()) {
     for (const pub of table.mediaSockets()) if (pub !== socketId) io.to(pub).emit('rtc:gone', { peer: socketId });
   }
 }
@@ -266,6 +353,7 @@ io.on('connection', (socket) => {
   socket.emit('roulette:state', roulette.publicState());
   socket.emit('roulette:bets', roulette.userBets(user.id));
   socket.emit('bj:lobby', lobbyState());
+  socket.emit('bj:rooms', roomSummaries(user.id));
   socket.emit('rtc:config', { iceServers: ICE_SERVERS });
   socket.emit('trivia:config', trivia.config);
   // Lo que viene de MySQL llega un poco después; los eventos se registran antes (abajo)
@@ -293,8 +381,9 @@ io.on('connection', (socket) => {
       const reply = typeof ack === 'function' ? ack : () => {};
       if (!allow()) return reply({ ok: false, error: 'Vas demasiado rápido' });
       try {
-        await handler(payload && typeof payload === 'object' ? payload : {});
-        reply({ ok: true });
+        // Un handler puede devolver { ack: {...} } para responder datos además de ok.
+        const result = await handler(payload && typeof payload === 'object' ? payload : {});
+        reply({ ok: true, ...(result?.ack ?? {}) });
       } catch (err) {
         if (!(err instanceof GameError)) console.error(`[${event}]`, err);
         reply(err instanceof GameError ? { ok: false, error: err.message, ...err.extra } : { ok: false, error: 'Error interno' });
@@ -307,12 +396,13 @@ io.on('connection', (socket) => {
   // Mirar una mesa: deja la sala de la anterior y recibe el estado de la nueva.
   const watch = (table) => {
     if (!socket.rooms.has(table.room)) rtcGone(socket.id); // deja de ver las cámaras de la mesa anterior
-    for (const other of tables.values()) if (other !== table) socket.leave(other.room);
+    for (const other of allTables()) if (other !== table) socket.leave(other.room);
     socket.join(table.room);
   };
   on('bj:watch', async (p) => {
     const table = getTable(p.table);
     watch(table);
+    joinRoom(table, user.id);
     socket.emit('bj:state', table.publicState());
     socket.emit('chat:history', { channel: table.room, messages: await chat.history(table.room) });
   });
@@ -322,11 +412,21 @@ io.on('connection', (socket) => {
       const current = tableOf(user.id);
       if (current && current !== table) throw new GameError(`Ya estás sentado en la ${current.name}`);
       watch(table); // antes de sentarse, para recibir el estado que se envía al hacerlo
+      joinRoom(table, user.id);
       await ranks.load(user.id); // su emblema en la silla
       return table.sit(user, p.seat);
     })
   );
   on('bj:leave', () => tableOf(user.id)?.leave(user.id));
+  // Salas personalizadas: crear una (de 2 a 15 sillas) o quitarla de tu lista.
+  on('bj:create', (p) => ({ ack: { table: createRoom(user.id, p.seats) } }));
+  on('bj:forget', (p) => {
+    const room = rooms.get(typeof p.table === 'string' ? p.table.toUpperCase() : '');
+    if (!room) return;
+    if (room.table.seatIndexOf(user.id) !== -1) throw new GameError('Primero levántate de la mesa');
+    room.members.delete(user.id);
+    sendRooms(user.id);
+  });
   // Cámara y micrófono del jugador sentado (los emite este socket).
   on('bj:media', (p) => requireTable(user.id).setMedia(user.id, socket.id, { video: p.video === true, audio: p.audio === true }));
 
@@ -348,7 +448,7 @@ io.on('connection', (socket) => {
   // Solo se escribe en la ruleta o en la mesa que se está mirando (su sala).
   on('chat:send', async (p) => {
     const channel = p.channel;
-    const allowed = channel === roulette.room || [...tables.values()].some((t) => t.room === channel && socket.rooms.has(channel));
+    const allowed = channel === roulette.room || [...allTables()].some((t) => t.room === channel && socket.rooms.has(channel));
     if (!allowed) throw new GameError('Canal de chat no válido');
     await ranks.load(user.id); // su emblema junto al nombre
     io.to(channel).emit('chat:message', await chat.post(user, channel, p.text));
@@ -372,7 +472,7 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     // Su cámara y micrófono (si los emitía) se apagan ya; el asiento se conserva unos segundos.
-    for (const table of tables.values()) {
+    for (const table of allTables()) {
       table.clearMedia(socket.id).catch((err) => console.error('[blackjack] Al apagar cámara/micrófono', err));
     }
     rtcGone(socket.id);

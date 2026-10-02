@@ -236,8 +236,16 @@ fichas se desliza en horizontal.
 
 ## Blackjack
 
-- **5 mesas de 15 jugadores**. Arriba de la mesa puedes cambiar de mesa y ver cuántos hay en cada
-  una. Solo puedes estar sentado en una mesa a la vez, pero puedes mirar las demás.
+- **3 mesas públicas de 15 jugadores**. Arriba de la mesa puedes cambiar de mesa y ver cuántos
+  hay en cada una. Solo puedes estar sentado en una mesa a la vez, pero puedes mirar las demás.
+- **Salas personalizadas**: con el botón **+** junto a las mesas creas una sala eligiendo de **2 a
+  15 jugadores** (la mesa tiene exactamente esas sillas). Cada sala tiene un **código de 4
+  caracteres** (letras y números, sin 0/O ni 1/I para no confundirlos) que se comparte para que
+  otros entren con «Unirse con código». No salen en la lista pública: a cada jugador le aparecen
+  las salas en las que ha entrado, con botones para copiar el código y quitarla de su lista.
+  Tienen su propio chat. Cada jugador puede tener una sala abierta a la vez; se cierra sola tras
+  2 minutos sin nadie sentado ni mirando (y su chat se borra). Viven en memoria: un reinicio del
+  servidor las cierra.
 - Apuesta máxima **200.000 por mano** (doblar y dividir cobran otro tanto).
 - 8 barajas, el crupier se planta en 17, blackjack paga 3:2, doblar con dos cartas y
   dividir una vez.
@@ -284,7 +292,7 @@ fichas se desliza en horizontal.
 
 ## Cosméticos
 
-- Pestaña **Cosméticos**: bordes de perfil animados que se ven alrededor de tu foto en las mesas
+- **Cosméticos** (en tu perfil: pulsa tu foto arriba y luego «Cosméticos»; «Volver» te regresa a donde estabas): bordes de perfil animados que se ven alrededor de tu foto en las mesas
   de blackjack, el chat, el ranking y tu perfil (en el chat, la barra de arriba y las filas del
   ranking solo el aro, porque los adornos no caben).
 - Cuatro niveles, seis bordes en cada uno: tres con formas propias y tres con alas metálicas.

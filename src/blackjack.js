@@ -76,10 +76,12 @@ const newHand = (cards, bet, fromSplit = false) => ({
 });
 
 class BlackjackTable {
-  constructor(io, id, { seats = MAX_SEATS, onChange = () => {} } = {}) {
+  /** `custom`: sala creada por un jugador (id = código de 4 caracteres, nombre "Sala <código>"). */
+  constructor(io, id, { seats = MAX_SEATS, name = `Mesa ${id}`, custom = false, onChange = () => {} } = {}) {
     this.io = io;
     this.id = id;
-    this.name = `Mesa ${id}`;
+    this.name = name;
+    this.custom = custom;
     this.room = `bj:${id}`;
     this.onChange = onChange; // avisa a server.js para actualizar el resumen de mesas
     this.seats = Array(seats).fill(null);
@@ -178,6 +180,7 @@ class BlackjackTable {
     return {
       id: this.id,
       name: this.name,
+      custom: this.custom,
       seats: this.seats.length,
       occupants: this.seats.filter(Boolean).map((s) => s.userId),
       phase: this.phase,

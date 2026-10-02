@@ -14,8 +14,10 @@ window.BlackjackUI = (() => {
   let state = null;
   let deadline = 0;
   let pendingBet = 0;
-  let currentTable = 1; // mesa que se está mirando
-  let lobby = []; // resumen de todas las mesas
+  let currentTable = 1; // mesa que se está mirando: 1-3, o el código de una sala ("K7QX")
+  let lobby = []; // resumen de las mesas públicas
+  let rooms = []; // salas personalizadas que tengo en mi lista
+  const knownRooms = new Set(); // códigos que ya llegaron alguna vez en `rooms`
   let lobbyReceived = false;
 
   // Contenedores de cartas persistentes (por mano), para animar solo lo nuevo
@@ -36,10 +38,14 @@ window.BlackjackUI = (() => {
     return state ? state.seats.findIndex((s) => s && s.userId === ctx.user.id) : -1;
   }
 
+  const allTables = () => [...lobby, ...rooms];
+
   /** Mesa en la que estás sentado (puede no ser la que estás mirando). */
   function myTable() {
-    return lobby.find((t) => t.occupants.includes(ctx.user.id)) ?? null;
+    return allTables().find((t) => t.occupants.includes(ctx.user.id)) ?? null;
   }
+
+  const nameOf = (id) => allTables().find((t) => t.id === id)?.name ?? (typeof id === 'string' ? `Sala ${id}` : `Mesa ${id}`);
 
   function span(cls, text) {
     const el = document.createElement('span');
@@ -317,6 +323,12 @@ window.BlackjackUI = (() => {
 
     // Asientos: solo se rehacen los que cambiaron, y se sustituyen en su sitio.
     const container = $('#bj-seats');
+    // Columnas según cuántas sillas tiene la mesa (las salas pueden tener de 2 a 15).
+    const seatCount = state.seats.length;
+    container.style.setProperty('--cols', Math.min(seatCount, 5));
+    container.style.setProperty('--cols-md', Math.min(seatCount, 3));
+    container.style.setProperty('--cols-sm', Math.min(seatCount, 2));
+    container.style.setProperty('--colw', seatCount >= 5 ? '1fr' : '210px');
     const elsewhereId = myTable()?.id ?? null;
     state.seats.forEach((s, i) => {
       // Clave con todo lo que muestra la silla; una vacía solo depende de si puedes sentarte.
@@ -415,10 +427,26 @@ window.BlackjackUI = (() => {
     return t.occupants.length ? ['open', 'Abierta'] : ['free', 'Libre'];
   }
 
+  async function copyCode(code) {
+    try {
+      await navigator.clipboard.writeText(code);
+      ctx.toast(`Código ${code} copiado`, 'success');
+    } catch {
+      ctx.toast(`El código de la sala es ${code}`);
+    }
+  }
+
   function renderTables() {
     const mine = myTable();
+    const plus = document.createElement('button');
+    plus.type = 'button';
+    plus.className = 'bj-table-pick bj-room-add';
+    plus.title = 'Crear sala o unirse con código';
+    plus.setAttribute('aria-label', 'Crear sala o unirse con código');
+    plus.innerHTML = '<i class="bi bi-plus-lg"></i>';
+    plus.addEventListener('click', openRoomModal);
     $('#bj-tables').replaceChildren(
-      ...lobby.map((t) => {
+      ...allTables().map((t) => {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'bj-table-pick';
@@ -439,12 +467,86 @@ window.BlackjackUI = (() => {
         head.append(span('tp-name', t.name), badge);
         btn.append(head, count);
         btn.addEventListener('click', () => watch(t.id));
+        if (!t.custom) return btn;
+        // Sala: copiar el código y quitarla de mi lista.
+        btn.classList.add('custom');
+        const tools = span('tp-tools', '');
+        const copy = document.createElement('span');
+        copy.className = 'tp-tool';
+        copy.setAttribute('role', 'button');
+        copy.title = `Copiar código ${t.id}`;
+        copy.innerHTML = '<i class="bi bi-copy"></i>';
+        copy.addEventListener('click', (e) => { e.stopPropagation(); copyCode(t.id); });
+        tools.append(copy);
+        if (mine?.id !== t.id) {
+          const forget = document.createElement('span');
+          forget.className = 'tp-tool';
+          forget.setAttribute('role', 'button');
+          forget.title = 'Quitar de mi lista';
+          forget.innerHTML = '<i class="bi bi-x-lg"></i>';
+          forget.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const res = await ctx.emit('bj:forget', { table: t.id });
+            if (!res.ok) ctx.toast(res.error, 'error');
+          });
+          tools.append(forget);
+        }
+        count.append(tools);
         return btn;
-      })
+      }),
+      plus
     );
   }
 
-  const chatChannel = () => ({ channel: `bj:${currentTable}`, label: `Mesa ${currentTable}` });
+  // ---------- salas personalizadas ----------
+
+  const roomModal = () => window.bootstrap.Modal.getOrCreateInstance($('#room-modal'));
+
+  function renderRoomPreview() {
+    const n = Number($('#rm-seats').value);
+    $('#rm-seats-out').textContent = `${n} jugadores`;
+    $('#rm-preview').replaceChildren(...Array.from({ length: n }, (_, i) => span('rm-seat', String(i + 1))));
+  }
+
+  function openRoomModal() {
+    $('#rm-error').textContent = '';
+    $('#rm-code').value = '';
+    renderRoomPreview();
+    roomModal().show();
+  }
+
+  async function createRoom() {
+    const btn = $('#rm-create');
+    btn.disabled = true;
+    const res = await ctx.emit('bj:create', { seats: Number($('#rm-seats').value) });
+    btn.disabled = false;
+    if (!res.ok) {
+      $('#rm-error').textContent = res.error;
+      return;
+    }
+    roomModal().hide();
+    watch(res.table);
+    ctx.toast(`Sala ${res.table} creada. Comparte el código para que entren tus amigos.`, 'success');
+  }
+
+  async function joinRoom(e) {
+    e.preventDefault();
+    const code = $('#rm-code').value.trim().toUpperCase();
+    if (!/^[A-Z0-9]{4}$/.test(code)) {
+      $('#rm-error').textContent = 'El código tiene 4 letras o números.';
+      return;
+    }
+    // Se comprueba antes de cambiar de mesa, para no quedarse mirando una sala que no existe.
+    const res = await ctx.emit('bj:watch', { table: code });
+    if (!res.ok) {
+      $('#rm-error').textContent = res.error;
+      return;
+    }
+    roomModal().hide();
+    watch(code);
+  }
+
+  const chatChannel = () => ({ channel: `bj:${currentTable}`, label: nameOf(currentTable) });
 
   /** Cambia la mesa que se está mirando. */
   async function watch(id) {
@@ -472,7 +574,11 @@ window.BlackjackUI = (() => {
       }
     }
     const res = await ctx.emit('bj:watch', { table: id });
-    if (!res.ok) ctx.toast(res.error, 'error');
+    if (!res.ok) {
+      ctx.toast(res.error, 'error');
+      // Una sala que ya no existe (se cerró, o el servidor se reinició): vuelta a la mesa 1.
+      if (typeof id === 'string' && currentTable === id) watch(1);
+    }
   }
 
   function renderPending() {
@@ -559,6 +665,25 @@ window.BlackjackUI = (() => {
       lobbyReceived = true;
       renderTables();
       if (state) render();
+    });
+
+    ctx.socket.on('bj:rooms', (list) => {
+      rooms = list;
+      for (const r of rooms) knownRooms.add(r.id);
+      // La sala que miraba se cerró o la quité de mi lista: vuelta a la mesa 1.
+      if (typeof currentTable === 'string' && knownRooms.has(currentTable) && !rooms.some((r) => r.id === currentTable)) {
+        knownRooms.delete(currentTable);
+        watch(1);
+      }
+      renderTables();
+      if (state) render();
+    });
+
+    $('#rm-seats').addEventListener('input', renderRoomPreview);
+    $('#rm-create').addEventListener('click', createRoom);
+    $('#rm-join').addEventListener('submit', joinRoom);
+    $('#rm-code').addEventListener('input', (e) => {
+      e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
     });
 
     ctx.socket.on('bj:outcome', onOutcome);
