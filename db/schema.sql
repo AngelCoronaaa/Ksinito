@@ -163,3 +163,13 @@ CREATE TABLE IF NOT EXISTS trivia_rounds (
   KEY trivia_user (user_id, id),
   KEY trivia_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Preguntas de la trivia que ya vio cada jugador, para no repetírselas mientras queden otras
+-- (y, cuando ya las vio todas, sacar las que vio hace más tiempo). `question_id` es
+-- "<categoría>:<hash del texto>", así que no cambia al añadir o quitar preguntas del banco.
+CREATE TABLE IF NOT EXISTS trivia_seen (
+  user_id     BIGINT UNSIGNED NOT NULL,
+  question_id VARCHAR(32)     CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  seen_at     BIGINT          NOT NULL,
+  PRIMARY KEY (user_id, question_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

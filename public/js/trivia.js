@@ -1,6 +1,6 @@
 'use strict';
 
-// Trivia: ruleta de categorías + 5 preguntas. El servidor elige categoría, pregunta y orden de
+// Trivia: ruleta de categorías + 8 preguntas. El servidor elige categoría, pregunta y orden de
 // las opciones, y solo dice cuál era la correcta después de responder. Aquí solo se dibuja:
 // cada `trivia:round` trae la partida entera y la pantalla se construye a partir de ella.
 window.TriviaUI = (() => {
@@ -251,7 +251,7 @@ window.TriviaUI = (() => {
         $('#tv-progress').style.width = `${(left / r.duration) * 100}%`;
         if (seconds !== lastSecond) {
           $('#tv-seconds').textContent = `${seconds} s`;
-          const urgent = seconds <= 5;
+          const urgent = seconds <= 3;
           $('#tv-seconds').classList.toggle('urgent', urgent);
           $('#tv-clock .phase-progress').classList.toggle('urgent', urgent);
         }
@@ -394,6 +394,22 @@ window.TriviaUI = (() => {
         pending = Math.min(config.max, pending + v);
         renderPending();
       }, false, c.min);
+      // All-in: todo el saldo, hasta el máximo de la trivia.
+      const allIn = document.createElement('button');
+      allIn.type = 'button';
+      allIn.className = 'chip chip-allin';
+      allIn.textContent = 'ALL-IN';
+      allIn.setAttribute('aria-label', 'Apostar todo tu saldo');
+      allIn.addEventListener('click', () => {
+        const all = Math.min(config.max, ctx.credits() ?? 0);
+        if (all < config.min) {
+          ctx.toast(`Necesitas al menos ${fmt(config.min)} créditos para jugar`, 'error');
+          return;
+        }
+        pending = all;
+        renderPending();
+      });
+      $('#tv-chips').appendChild(allIn);
     }
     renderPending();
     if (view === 'lobby') show('lobby');
@@ -409,6 +425,16 @@ window.TriviaUI = (() => {
       renderPending();
     });
     $('#tv-again').addEventListener('click', () => show('lobby'));
+    // La pregunta y las opciones no se pueden seleccionar ni copiar (para no pegarlas en un
+    // buscador). Con una pregunta en pantalla, tampoco se copia nada de la página.
+    for (const type of ['copy', 'cut', 'contextmenu', 'selectstart', 'dragstart']) {
+      $('#tv-game').addEventListener(type, (e) => e.preventDefault());
+    }
+    document.addEventListener('copy', (e) => {
+      if (round?.phase !== 'question') return;
+      e.preventDefault();
+      e.clipboardData?.setData('text/plain', '');
+    });
     // Atajos: 1-4 o A-D para responder mientras la trivia está a la vista.
     document.addEventListener('keydown', (e) => {
       if ($('#trivia').classList.contains('hidden') || e.target.closest('input, textarea') || e.ctrlKey || e.metaKey || e.altKey) return;

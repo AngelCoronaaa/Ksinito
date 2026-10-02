@@ -1858,7 +1858,7 @@ button.chat-name:hover { text-decoration: underline; }
   animation: glowFade .9s ease-in-out infinite alternate;
 }
 
-.tv-steps { display: flex; gap: 10px; justify-content: center; }
+.tv-steps { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .tv-step {
   position: relative;
   width: 36px;
@@ -1990,6 +1990,21 @@ button.chat-name:hover { text-decoration: underline; }
 .tv-result.bad { color: var(--lose); }
 
 .tv-next { justify-self: center; padding-inline: 1.6rem; }
+/* Ficha de all-in: todo el saldo (hasta el máximo de la trivia). */
+.chip-allin {
+  --c: #8f1020;
+  --edge: var(--gold);
+  font-size: .62rem;
+  letter-spacing: -.02em;
+}
+/* La pregunta y sus opciones no se pueden seleccionar (ni mantener pulsado en el móvil para copiar). */
+#tv-game .tv-question, #tv-game .tv-opt {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.tv-credit { margin-top: 6px; font-size: .7rem; }
+.tv-credit a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 
 @media (max-width: 991.98px) {
   .tv-panel { min-height: 0; }
@@ -2001,7 +2016,8 @@ button.chat-name:hover { text-decoration: underline; }
   .tv-wheel-wrap { width: min(260px, 70vw); }
   .tv-options { grid-template-columns: minmax(0, 1fr); }
   .tv-opt { min-height: 48px; padding: 8px 12px; }
-  .tv-step { width: 32px; height: 32px; }
+  .tv-steps { gap: 6px; }
+  .tv-step { width: 30px; height: 30px; font-size: .8rem; }
   /* La fila de fichas se desliza en horizontal, como en los otros juegos. */
   .tv-bet .chips {
     flex-wrap: nowrap;

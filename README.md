@@ -248,24 +248,39 @@ fichas se desliza en horizontal.
 
 ## Trivia
 
-- Apuestas de **10 a 100.000** y respondes **5 preguntas**. Antes de cada una gira una ruleta con
+- Apuestas de **10 a 100.000** y respondes **8 preguntas**. Antes de cada una gira una ruleta con
   seis categorías: ciencia, geografía, historia, cine, arte y deportes.
-- Al terminar cobras según los aciertos: **5/5 ×3**, **4/5 ×2**, **3/5 ×1,5** (redondeado hacia
-  abajo); con menos de 3 pierdes lo apostado.
-- **20 s por pregunta**; si se acaba el tiempo cuenta como fallo. Si no pulsas "Girar" en 30 s,
+- Ficha **ALL-IN**: apuesta todo tu saldo de una vez (hasta el máximo de 100.000).
+- Al terminar cobras según los aciertos: **8/8 ×2,5**, **7/8 y 6/8 ×2**, **5/8 ×1,5** (redondeado
+  hacia abajo); con menos de 5 pierdes lo apostado.
+- **10 s por pregunta**; si se acaba el tiempo cuenta como fallo. Si no pulsas "Girar" en 30 s,
   la ruleta gira sola, así que una partida abandonada siempre termina.
 - **El servidor decide todo**: la categoría, la pregunta y el orden de las opciones. La pregunta
   no se envía hasta que la ruleta termina de girar, y cuál era la correcta solo se envía después
-  de responder. No se repiten preguntas en una partida y se evitan las que viste hace poco.
-- Las preguntas están en `src/trivia-questions.js` (25 por categoría); para añadir más, pon la
-  respuesta correcta la primera (el servidor baraja las opciones). Evita preguntas cuya respuesta
-  cambie con el tiempo. `npm test` comprueba que cada una tenga 4 opciones distintas.
+  de responder.
+- **Más de 1.000 preguntas** (entre 128 y 233 por categoría), en dos archivos:
+  - `src/trivia-questions.js`: preguntas propias, muchas sobre México, Latinoamérica y España.
+  - `src/trivia-questions-opentdb.js`: preguntas de [Open Trivia DB](https://opentdb.com)
+    traducidas al español y revisadas (se quitaron las que solo funcionan en inglés, las
+    repetidas, las dudosas o que cambian con el tiempo y las muy locales de EE. UU. o Reino
+    Unido). Su licencia, CC BY-SA 4.0, pide dar crédito: lo hace la línea bajo la trivia. Si
+    se retira ese archivo, hay que quitar también esa línea.
+- **Sin repeticiones:** cada pregunta que ve un jugador se guarda en `trivia_seen`, y siempre
+  le sale una que no haya visto nunca. Solo cuando ya vio todas las de una categoría vuelve a
+  sacarle de las que vio hace más tiempo. Sobrevive a los reinicios y redeploys.
+- Para añadir preguntas, ponlas en `src/trivia-questions.js` con la respuesta correcta la
+  primera (el servidor baraja las opciones). Evita preguntas cuya respuesta cambie con el
+  tiempo. `npm test` comprueba que cada una tenga 4 opciones distintas y que no haya repetidas.
+  El id de cada pregunta sale de su texto: si corriges un enunciado, cuenta como pregunta nueva.
 - Cada partida se guarda en `trivia_rounds` (apuesta, aciertos, pago y preguntas que salieron).
   Si el servidor se reinicia con una partida a medias, al arrancar se devuelve la apuesta.
 - Al recargar la página vuelves a la partida en juego, con el tiempo que quedaba.
-- Las respuestas se pueden buscar en internet en esos 20 s: con apuestas altas, un jugador que lo
-  haga gana casi siempre. Si pasa, baja `MAX_BET`, `ANSWER_MS` o los multiplicadores
-  (constantes al principio de `src/trivia.js`).
+- La pregunta y las opciones no se pueden seleccionar, copiar ni arrastrar (tampoco mantener
+  pulsado en el móvil), y mientras hay una pregunta en pantalla no se copia nada de la página.
+  Es una barrera para no pegarla en un buscador, no una garantía: con una captura de pantalla
+  o las herramientas de desarrollador se puede leer igual. La defensa real son los 10 s.
+  Si aun así hay abusos, baja `MAX_BET`, `ANSWER_MS` o los multiplicadores (constantes al
+  principio de `src/trivia.js`).
 
 ## Límite de cuentas
 
@@ -318,7 +333,8 @@ src/
   blackjack.js  Lógica de las mesas de blackjack
   ducks.js      Juego de patos: rondas, patos, validación de disparos, tope diario y pago
   trivia.js     Trivia: partidas, ruleta de categorías, preguntas, tiempos y pago
-  trivia-questions.js  Banco de preguntas de la trivia, por categoría
+  trivia-questions.js  Preguntas propias de la trivia, por categoría
+  trivia-questions-opentdb.js  Preguntas de Open Trivia DB traducidas (CC BY-SA 4.0)
   env.js        Lectura y validación de variables de entorno numéricas
 public/         Cliente: Bootstrap 5 + Bootstrap Icons, JS sin frameworks y sin build.
                 Bootstrap, iconos, fuentes (Inter, Cinzel) y canvas-confetti se sirven

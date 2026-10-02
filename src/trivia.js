@@ -1,8 +1,8 @@
 'use strict';
 
-// Minijuego "Trivia", individual: apuestas de MIN_BET a MAX_BET y respondes 5 preguntas. Antes
+// Minijuego "Trivia", individual: apuestas de MIN_BET a MAX_BET y respondes 8 preguntas. Antes
 // de cada una gira una ruleta de categorías (ciencia, geografía, historia, cine, arte y deportes).
-// Al terminar se paga según los aciertos: 5/5 ×3, 4/5 ×2, 3/5 ×1,5; con menos se pierde lo apostado.
+// Al terminar se paga según los aciertos: 8/8 ×2,5, 7/8 y 6/8 ×2, 5/8 ×1,5; con menos se pierde lo apostado.
 //
 // El servidor decide todo: la categoría que sale, la pregunta y el orden de las opciones. La
 // pregunta solo se envía cuando la ruleta termina de girar, y la respuesta correcta solo después
@@ -15,23 +15,25 @@
 const crypto = require('node:crypto');
 const db = require('./db');
 const wallet = require('./wallet');
-const BANK = require('./trivia-questions');
+const OWN_BANK = require('./trivia-questions');
+const OPENTDB_BANK = require('./trivia-questions-opentdb');
 const { SerialQueue } = require('./queue');
 const { GameError, assertInt } = require('./errors');
 
 const MIN_BET = 10;
 const MAX_BET = 100_000;
-const QUESTIONS = 5;
+const QUESTIONS = 8;
 const MULTIPLIERS = [
-  { correct: 5, multiplier: 3 },
-  { correct: 4, multiplier: 2 },
-  { correct: 3, multiplier: 1.5 },
+  { correct: 8, multiplier: 2.5 },
+  { correct: 7, multiplier: 2 },
+  { correct: 6, multiplier: 2 },
+  { correct: 5, multiplier: 1.5 },
 ]; // con menos aciertos se pierde la apuesta
 const SPIN_MS = 3_600; // lo que tarda en girar la ruleta de categorías
-const ANSWER_MS = 20_000; // tiempo para responder cada pregunta
+const ANSWER_MS = 10_000; // tiempo para responder cada pregunta
 const GRACE_MS = 800; // margen para respuestas enviadas justo al final (latencia)
 const IDLE_MS = 30_000; // sin pulsar "Girar" en este tiempo, la ruleta gira sola
-const RECENT_PER_USER = 60; // preguntas recientes que no se le repiten a un jugador
+const SEEN_OLDEST_SHARE = 0.25; // si ya vio todas, sale una del 25 % que vio hace más tiempo
 
 const CATEGORIES = [
   { id: 'ciencia', name: 'Ciencia' },
@@ -49,6 +51,8 @@ const SQL = {
     WHERE id = ? AND user_id = ? AND status = 'playing'`,
   open: "SELECT id, user_id, bet FROM trivia_rounds WHERE status = 'playing'",
   refund: "UPDATE trivia_rounds SET status = 'refunded', ended_at = ? WHERE id = ? AND status = 'playing'",
+  seen: 'SELECT question_id, seen_at FROM trivia_seen WHERE user_id = ?',
+  markSeen: 'INSERT INTO trivia_seen (user_id, question_id, seen_at) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE seen_at = ?',
 };
 
 /** Multiplicador según los aciertos (0 = pierde la apuesta). */
@@ -63,7 +67,23 @@ function payoutFor(bet, correct) {
 
 // ---------- preguntas ----------
 
-const QUESTION_IDS = Object.fromEntries(CATEGORIES.map((c) => [c.id, BANK[c.id].map((_, i) => `${c.id}:${i}`)]));
+/**
+ * Todas las preguntas, por categoría y por id. El id sale del texto de la pregunta (no de su
+ * posición), así añadir o quitar preguntas no cambia el de las demás ni el historial guardado.
+ */
+const questionId = (categoryId, text) => `${categoryId}:${crypto.createHash('sha1').update(text).digest('hex').slice(0, 10)}`;
+const QUESTIONS_BY_ID = new Map();
+const QUESTION_IDS = Object.fromEntries(
+  CATEGORIES.map((c) => [
+    c.id,
+    [...OWN_BANK[c.id], ...(OPENTDB_BANK[c.id] ?? [])].map(([text, ...answers]) => {
+      const id = questionId(c.id, text);
+      if (QUESTIONS_BY_ID.has(id)) throw new Error(`[trivia] Pregunta repetida: ${text}`);
+      QUESTIONS_BY_ID.set(id, { text, answers });
+      return id;
+    }),
+  ])
+);
 
 function shuffle(items) {
   const out = [...items];
@@ -75,15 +95,18 @@ function shuffle(items) {
 }
 
 /**
- * Pregunta al azar de la categoría, evitando las de esta partida (`exclude`) y, si se puede,
- * las que el jugador vio hace poco (`recent`). Las opciones salen barajadas.
+ * Pregunta al azar de la categoría que no salió en esta partida (`exclude`). Sale una que el
+ * jugador no haya visto nunca (`seen`: id -> cuándo la vio); si ya las vio todas, una de las
+ * que vio hace más tiempo. Las opciones salen barajadas.
  */
-function pickQuestion(categoryId, exclude = new Set(), recent = new Set()) {
+function pickQuestion(categoryId, exclude = new Set(), seen = new Map()) {
   const ids = QUESTION_IDS[categoryId].filter((id) => !exclude.has(id));
-  const fresh = ids.filter((id) => !recent.has(id));
-  const pool = fresh.length ? fresh : ids;
+  const unseen = ids.filter((id) => !seen.has(id));
+  const pool = unseen.length
+    ? unseen
+    : ids.sort((a, b) => seen.get(a) - seen.get(b)).slice(0, Math.max(1, Math.ceil(ids.length * SEEN_OLDEST_SHARE)));
   const id = pool[crypto.randomInt(pool.length)];
-  const [text, ...answers] = BANK[categoryId][Number(id.split(':')[1])];
+  const { text, answers } = QUESTIONS_BY_ID.get(id);
   const order = shuffle([0, 1, 2, 3]); // la 0 es la correcta en el banco
   return { id, category: categoryId, text, options: order.map((i) => answers[i]), correctIndex: order.indexOf(0) };
 }
@@ -184,7 +207,7 @@ class TriviaRound {
 let io = null;
 const rounds = new Map(); // userId -> TriviaRound
 const queues = new Map(); // userId -> SerialQueue
-const recent = new Map(); // userId -> ids de preguntas vistas hace poco
+const seenCache = new Map(); // userId -> Map(id de pregunta -> cuándo la vio), cargado de trivia_seen
 
 function queueOf(userId) {
   let queue = queues.get(userId);
@@ -214,18 +237,27 @@ function activeRound(userId, roundId) {
   return round;
 }
 
-function remember(userId, questionId) {
-  const list = recent.get(userId) ?? [];
-  list.push(questionId);
-  if (list.length > RECENT_PER_USER) list.shift();
-  recent.set(userId, list);
+/** Preguntas que ya vio el jugador (de MySQL la primera vez; después, de memoria). */
+async function loadSeen(userId) {
+  if (!seenCache.has(userId)) {
+    const rows = await db.query(SQL.seen, [userId]);
+    seenCache.set(userId, new Map(rows.map((r) => [r.question_id, Number(r.seen_at)])));
+  }
+  return seenCache.get(userId);
+}
+
+/** Apunta la pregunta como vista. Si MySQL falla no pasa nada grave: como mucho se repetirá. */
+function markSeen(userId, questionId) {
+  const now = Date.now();
+  seenCache.get(userId)?.set(questionId, now);
+  db.query(SQL.markSeen, [userId, questionId, now, now]).catch((err) => console.error('[trivia] Al guardar pregunta vista', err));
 }
 
 function doSpin(round) {
   const category = CATEGORIES[crypto.randomInt(CATEGORIES.length)].id;
-  const question = pickQuestion(category, round.askedIds(), new Set(recent.get(round.userId)));
+  const question = pickQuestion(category, round.askedIds(), seenCache.get(round.userId));
   round.spin(question, performance.now());
-  remember(round.userId, question.id);
+  markSeen(round.userId, question.id);
   setTimer(round, SPIN_MS, () => ask(round));
   sendRound(round);
 }
@@ -290,6 +322,7 @@ function start(userId, amount) {
   assertInt(amount, MIN_BET, MAX_BET, 'La apuesta');
   return queueOf(userId).run(async () => {
     if (rounds.has(userId)) throw new GameError('Ya tienes una partida de trivia en juego');
+    await loadSeen(userId); // antes de cobrar: si MySQL falla aquí, no se pierde la apuesta
     // La fila de la partida y el cobro van juntos: si no le alcanza, no queda nada guardado.
     const id = await db.transaction(async (tx) => {
       const { insertId } = await tx.query(SQL.insert, [userId, amount, Date.now()]);
@@ -358,6 +391,8 @@ module.exports = {
   config,
   TriviaRound,
   pickQuestion,
+  QUESTION_IDS,
+  QUESTIONS_BY_ID,
   multiplierFor,
   payoutFor,
   CATEGORIES,
