@@ -455,7 +455,7 @@ window.RouletteUI = (() => {
     const to = target.getBoundingClientRect();
     const el = document.createElement('div');
     el.className = `chip chip-${value} chip-fly`;
-    el.textContent = value;
+    el.textContent = ctx.short(value);
     Object.assign(el.style, {
       left: `${from.left}px`, top: `${from.top}px`, width: `${from.width}px`, height: `${from.height}px`,
     });
@@ -486,7 +486,7 @@ window.RouletteUI = (() => {
     for (const [key, { stake }] of cells) {
       const amount = amounts.get(key) ?? 0;
       total += amount;
-      const text = amount ? String(amount) : '';
+      const text = amount ? ctx.short(amount) : '';
       if (stake.textContent === text) continue;
       stake.textContent = text;
       stake.classList.remove('pop');
@@ -495,7 +495,7 @@ window.RouletteUI = (() => {
         stake.classList.add('pop');
       }
     }
-    $('#rl-total').textContent = total;
+    $('#rl-total').textContent = total.toLocaleString('es');
   }
 
   function renderHistory(history, animate) {

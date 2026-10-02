@@ -220,7 +220,8 @@ window.BlackjackUI = (() => {
 
     if (seat.hands.length === 0) {
       if (seat.bet > 0) {
-        const chip = span('chip bet-chip', seat.bet);
+        const chip = span('chip bet-chip', ctx.short(seat.bet));
+        chip.title = seat.bet.toLocaleString('es');
         const key = `${i}:${seat.userId}:${seat.bet}`;
         if (shownBets.has(key)) chip.style.animation = 'none';
         shownBets.add(key);
@@ -246,7 +247,7 @@ window.BlackjackUI = (() => {
       const info = document.createElement('div');
       info.className = 'hand-info';
       if (hand.cards.length) info.append(totalEl(hand.total));
-      info.append(span('seat-bet', `${hand.bet}${hand.doubled ? ' ×2' : ''}`));
+      info.append(span('seat-bet', `${ctx.short(hand.bet)}${hand.doubled ? ' ×2' : ''}`));
       if (hand.result) {
         const badge = span(`res ${hand.result}`, RESULT_LABEL[hand.result]);
         const key = `${i}-${k}`;
@@ -353,7 +354,7 @@ window.BlackjackUI = (() => {
     const n = state.seats.length;
     if (!seat && elsewhere && elsewhere.id !== currentTable) hint = `Estás sentado en la ${elsewhere.name}. Levántate allí para jugar en esta mesa.`;
     else if (!seat) hint = state.seats.every(Boolean) ? `La mesa está llena (${n}/${n}). Puedes mirar o probar en otra mesa.` : 'Elige un asiento libre para jugar.';
-    else if (canBet) hint = `Elige tus fichas y pulsa Apostar (mín. ${state.limits.min}, máx. ${state.limits.max}).`;
+    else if (canBet) hint = `Elige tus fichas y pulsa Apostar (mín. ${state.limits.min}, máx. ${state.limits.max.toLocaleString('es')}).`;
     else if (seat.hands.length === 0 && seat.bet === 0) hint = 'Hay una mano en juego. Podrás apostar en la siguiente.';
     $('#bj-hint').textContent = hint;
     renderPending();
@@ -476,8 +477,8 @@ window.BlackjackUI = (() => {
 
   function renderPending() {
     const el = $('#bj-pending');
-    if (el.textContent !== String(pendingBet)) {
-      el.textContent = pendingBet;
+    if (el.textContent !== pendingBet.toLocaleString('es')) {
+      el.textContent = pendingBet.toLocaleString('es');
       el.animate?.([{ transform: 'scale(1.35)' }, { transform: 'scale(1)' }], { duration: 250, easing: 'ease-out' });
     }
     $('#bj-bet-place').disabled = pendingBet === 0;
@@ -507,7 +508,7 @@ window.BlackjackUI = (() => {
     ctx = appCtx;
 
     ctx.renderChips($('#bj-chips'), (v) => {
-      pendingBet = Math.min(state?.limits.max ?? 10_000, pendingBet + v);
+      pendingBet = Math.min(state?.limits.max ?? 200_000, pendingBet + v);
       renderPending();
     });
     $('#bj-bet-clear').addEventListener('click', () => { pendingBet = 0; renderPending(); });

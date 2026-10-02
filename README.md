@@ -220,17 +220,25 @@ pato derribado da **2 créditos** (`DUCK_REWARD`). No es un juego de apuestas.
   Audio API: sin imágenes ni audios externos. Botón para silenciar.
 - `npm test` ejecuta las pruebas de la trayectoria y de la validación de disparos (`test/`).
 
+## Fichas
+
+1, 5, 10, 25, 100, 500, 1K, 5K, 25K y 100K, en la ruleta y en el blackjack. Las cantidades
+grandes se muestran abreviadas en las fichas de la mesa ("100K", "1,5K"). En móvil la fila de
+fichas se desliza en horizontal.
+
 ## Ruleta
 
 - Ruleta europea (un cero), con rondas compartidas por todos: 20 s de apuestas,
   7 s de giro y 5 s mostrando el resultado.
 - Pleno 35:1 · Docena y columna 2:1 · Rojo/Negro, Par/Impar, 1-18/19-36 1:1.
+- Máximo **100.000 por ronda** (también por casilla: se puede poner todo en un número).
 - Se guardan en base de datos los **últimos 30 giros** (tabla `roulette_spins`).
 
 ## Blackjack
 
 - **5 mesas de 15 jugadores**. Arriba de la mesa puedes cambiar de mesa y ver cuántos hay en cada
   una. Solo puedes estar sentado en una mesa a la vez, pero puedes mirar las demás.
+- Apuesta máxima **200.000 por mano** (doblar y dividir cobran otro tanto).
 - 8 barajas, el crupier se planta en 17, blackjack paga 3:2, doblar con dos cartas y
   dividir una vez.
 - La mano se reparte cuando todos los sentados apostaron o 15 s después de la primera

@@ -17,8 +17,8 @@ const SPIN_MS = 7_000;
 const RESULT_MS = 5_000;
 const HISTORY_SIZE = 30;
 const MIN_BET = 1;
-const MAX_BET_PER_SPOT = 500;
-const MAX_BET_PER_ROUND = 2_000;
+const MAX_BET_PER_SPOT = 100_000; // igual que el de la ronda: se puede poner todo en una casilla
+const MAX_BET_PER_ROUND = 100_000;
 
 const RED = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
 const colorOf = (n) => (n === 0 ? 'green' : RED.has(n) ? 'red' : 'black');
@@ -164,8 +164,8 @@ class RouletteGame {
     const key = `${type}:${value ?? ''}`;
     const onSpot = bets.get(key)?.amount ?? 0;
     const inRound = [...bets.values()].reduce((sum, b) => sum + b.amount, 0);
-    if (onSpot + amount > MAX_BET_PER_SPOT) throw new GameError(`Máximo ${MAX_BET_PER_SPOT} por casilla`);
-    if (inRound + amount > MAX_BET_PER_ROUND) throw new GameError(`Máximo ${MAX_BET_PER_ROUND} por ronda`);
+    if (onSpot + amount > MAX_BET_PER_SPOT) throw new GameError(`Máximo ${MAX_BET_PER_SPOT.toLocaleString('es')} por casilla`);
+    if (inRound + amount > MAX_BET_PER_ROUND) throw new GameError(`Máximo ${MAX_BET_PER_ROUND.toLocaleString('es')} por ronda`);
 
     if ((await wallet.bet(user.id, amount, `roulette:bet:${key}`)) === null) {
       throw new GameError('Créditos insuficientes');

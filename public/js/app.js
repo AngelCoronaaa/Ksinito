@@ -2,7 +2,7 @@
 
 (() => {
   const $ = (sel) => document.querySelector(sel);
-  const CHIP_VALUES = [1, 5, 10, 25, 100];
+  const CHIP_VALUES = [1, 5, 10, 25, 100, 500, 1_000, 5_000, 25_000, 100_000];
   const TOAST_ICONS = { info: 'bi-info-circle-fill', error: 'bi-exclamation-triangle-fill', success: 'bi-check-circle-fill' };
   const CONFETTI_COLORS = ['#e8c46a', '#fff4cf', '#c1232c', '#16a35a', '#ffffff'];
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -47,6 +47,11 @@
     return el;
   };
   const fmt = (n) => n.toLocaleString('es');
+  /** Cantidad corta para fichas: 950 · 1K · 1,5K · 25K · 2M. */
+  const short = (n) =>
+    n >= 1e6 ? `${(n / 1e6).toLocaleString('es', { maximumFractionDigits: 1 })}M`
+      : n >= 1e3 ? `${(n / 1e3).toLocaleString('es', { maximumFractionDigits: 1 })}K`
+        : String(n);
 
   // ---------- animación de victoria ----------
 
@@ -261,9 +266,9 @@
       const chip = document.createElement('button');
       chip.type = 'button';
       chip.className = `chip chip-${value}`;
-      chip.textContent = value;
+      chip.textContent = short(value);
       chip.dataset.value = value;
-      chip.setAttribute('aria-label', `Ficha de ${value}`);
+      chip.setAttribute('aria-label', `Ficha de ${fmt(value)}`);
       if (selectable && i === 0) chip.classList.add('selected');
       chip.addEventListener('click', () => {
         if (selectable) {
@@ -447,7 +452,7 @@
     socket.on('disconnect', () => toast('Conexión perdida, reconectando…', 'error'));
 
     const ctx = {
-      socket, emit, api, toast, celebrate, renderChips, avatar: avatarEl, reducedMotion, user,
+      socket, emit, api, toast, celebrate, renderChips, avatar: avatarEl, reducedMotion, user, short,
       confetti: confettiBurst,
       credits: () => credits,
       chat: window.ChatUI,

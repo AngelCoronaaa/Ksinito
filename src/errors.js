@@ -13,7 +13,7 @@ class GameError extends Error {
 
 function assertInt(value, min, max, label) {
   if (!Number.isSafeInteger(value) || value < min || value > max) {
-    throw new GameError(`${label} debe ser un número entero entre ${min} y ${max}`);
+    throw new GameError(`${label} debe ser un número entero entre ${min.toLocaleString('es')} y ${max.toLocaleString('es')}`);
   }
   return value;
 }

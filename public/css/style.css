@@ -511,6 +511,13 @@ button.chip:hover { transform: translateY(-3px) rotate(-10deg); }
 .chip-10 { --c: #1f5fbf; }
 .chip-25 { --c: #128a4a; }
 .chip-100 { --c: #1a1a1a; --edge: var(--gold); }
+.chip-500 { --c: #6a2fb5; }
+.chip-1000 { --c: #e0891a; }
+.chip-5000 { --c: #c21f6b; }
+.chip-25000 { --c: #0f7f86; --edge: #ffe08a; }
+.chip-100000 { --c: #b8901f; --edge: #1a1a1a; }
+/* Las de 4 caracteres ("100K") con letra algo menor para que quepan */
+.chip-25000, .chip-100000 { font-size: .74rem; letter-spacing: -.02em; }
 .chip-fly { position: fixed; z-index: 1100; pointer-events: none; margin: 0; }
 
 .bet-summary { color: var(--muted); font-size: .9rem; }
@@ -982,6 +989,10 @@ button.chip:hover { transform: translateY(-3px) rotate(-10deg); }
 .bj-controls:not(:has(.hint:not(:empty), .bj-bet:not(.hidden), .bj-actions:not(.hidden))) { display: none; }
 .hint { margin: 0; color: var(--muted); text-align: center; }
 .hint:empty { display: none; }
+/* La columna no puede ser más ancha que la barra: así la fila de fichas desliza en móvil
+   en vez de ensanchar toda la barra fuera de la pantalla. */
+.bj-controls { grid-template-columns: minmax(0, 1fr); }
+.bj-bet { max-width: 100%; min-width: 0; }
 .bj-bet, .bj-actions { display: flex; gap: 12px; align-items: center; justify-content: center; flex-wrap: wrap; animation: fadeUp .35s var(--ease-out); }
 .bj-actions .btn { min-width: 128px; padding: 10px 18px; }
 #bj-bet-place { padding-inline: 1.5rem; }
@@ -1571,7 +1582,19 @@ button.chat-name:hover { text-decoration: underline; }
   .chip { width: 40px; height: 40px; font-size: .78rem; }
   .chip::before { inset: 5px; }
   .chip.selected { transform: translateY(-4px); }
-  .bet-controls .chips, .bj-bet .chips { flex-basis: 100%; justify-content: center; }
+  /* Las 10 fichas no caben en un móvil: la fila se desliza en horizontal en vez de partirse en
+     dos líneas, que agrandaría la barra fija y taparía la mesa. */
+  .bet-controls .chips, .bj-bet .chips {
+    flex-basis: 100%;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding: 6px 2px; /* sitio para la ficha elegida, que sube un poco */
+    margin: -6px 0;
+  }
+  .bet-controls .chips::-webkit-scrollbar, .bj-bet .chips::-webkit-scrollbar { display: none; }
+  .bet-controls .chip, .bj-bet .chip { flex-shrink: 0; }
   .bet-controls, .bj-bet { gap: 8px 10px; }
   .bet-controls .btn, .bj-bet .btn { padding: 5px 10px; font-size: .85rem; }
   .bet-summary { font-size: .8rem; }
