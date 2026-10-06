@@ -2258,3 +2258,32 @@ button.chat-name:hover { text-decoration: underline; }
 .rm-range .form-range::-moz-range-thumb { background: var(--gold); }
 .rm-range .form-range:focus::-webkit-slider-thumb { box-shadow: 0 0 0 4px rgba(232, 196, 106, .3); }
 .rm-range .form-range:focus::-moz-range-thumb { box-shadow: 0 0 0 4px rgba(232, 196, 106, .3); }
+
+/* Trivia: selector de modo */
+.tv-title-mode { font-size: .62em; color: var(--muted); letter-spacing: .08em; }
+.tv-modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.tv-mode {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .04);
+  color: var(--text);
+  text-align: left;
+  transition: border-color .2s, background-color .2s, transform .15s var(--ease-out);
+}
+.tv-mode:hover { transform: translateY(-1px); border-color: rgba(232, 196, 106, .45); }
+.tv-mode i { grid-row: span 2; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 11px; font-size: 1.2rem; }
+.tv-mode-clasica i { background: linear-gradient(135deg, #1fae6a, #e9b322); color: #08210f; }
+.tv-mode-tecnologia i { background: linear-gradient(135deg, #4f7cff, #13a8a0); color: #061430; }
+.tv-mode-name { font-weight: 800; }
+.tv-mode-desc { font-size: .74rem; color: var(--muted); line-height: 1.25; }
+.tv-mode.active { border-color: var(--gold); background: rgba(232, 196, 106, .1); box-shadow: 0 0 0 1px var(--gold); }
+@media (max-width: 575.98px) {
+  .tv-mode-desc { display: none; }
+  .tv-mode i { grid-row: auto; width: 32px; height: 32px; font-size: 1rem; }
+}

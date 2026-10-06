@@ -465,7 +465,7 @@ io.on('connection', (socket) => {
 
   // Trivia: el cliente solo pide girar y elige opción; categoría, pregunta y acierto los decide
   // el servidor. Los eventos de la partida van a user:<id>.
-  on('trivia:start', (p) => trivia.start(user.id, p.amount));
+  on('trivia:start', (p) => trivia.start(user.id, p.amount, p.mode));
   on('trivia:spin', (p) => trivia.spin(user.id, p.roundId));
   on('trivia:answer', (p) => trivia.answer(user.id, p.roundId, p.choice));
   on('trivia:resume', () => socket.emit('trivia:round', trivia.resume(user.id)));

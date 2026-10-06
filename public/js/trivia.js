@@ -14,7 +14,16 @@ window.TriviaUI = (() => {
     cine: { color: '#d93a8c', icon: 'bi-film' },
     arte: { color: '#cf3131', icon: 'bi-palette-fill' },
     deportes: { color: '#ee7a16', icon: 'bi-trophy-fill' },
+    // Modo Tecnología
+    hardware: { color: '#4f7cff', icon: 'bi-cpu-fill' },
+    software: { color: '#9b5cf6', icon: 'bi-window-stack' },
+    sistemas: { color: '#13a8a0', icon: 'bi-terminal-fill' },
+    internet: { color: '#1fa3e0', icon: 'bi-wifi' },
+    programacion: { color: '#f2a52b', icon: 'bi-code-slash' },
+    empresas: { color: '#e5487a', icon: 'bi-building-fill' },
   };
+  const MODE_ICON = { clasica: 'bi-stars', tecnologia: 'bi-motherboard-fill' };
+  const MODE_KEY = 'ksinito.trivia.mode'; // último modo elegido (solo comodidad, en este navegador)
   const LETTERS = ['A', 'B', 'C', 'D'];
   const REVEAL_MS = 1_800; // la última respuesta se ve un momento antes del resumen
 
@@ -33,16 +42,22 @@ window.TriviaUI = (() => {
   let clock = 0; // requestAnimationFrame de la cuenta atrás
   let summaryTimer = 0;
   let firstResume = true;
+  let mode = null; // modo elegido para la próxima partida
+  let wheelMode = null; // modo cuyas categorías tiene ahora la ruleta
 
   const fmt = (n) => n.toLocaleString('es');
-  const nameOf = (id) => config?.categories.find((c) => c.id === id)?.name ?? id;
+  const modeOf = (id) => config.modes.find((m) => m.id === id) ?? config.modes[0];
+  const nameOf = (id) => config?.modes.flatMap((m) => m.categories).find((c) => c.id === id)?.name ?? id;
   const xLabel = (m) => `×${m.toLocaleString('es')}`;
 
   // ---------- ruleta ----------
 
-  function buildWheel() {
+  /** Pone en la ruleta las categorías del modo (si ya las tiene, no hace nada). */
+  function buildWheel(modeId) {
+    if (modeId === wheelMode) return;
+    wheelMode = modeId;
     const wheel = $('#tv-wheel');
-    const cats = config.categories;
+    const cats = modeOf(modeId).categories;
     const slice = 360 / cats.length;
     wheel.style.background = `conic-gradient(${cats
       .map((c, i) => `${LOOK[c.id]?.color ?? '#555'} ${i * slice}deg ${(i + 1) * slice}deg`)
@@ -61,7 +76,7 @@ window.TriviaUI = (() => {
 
   /** Gira la ruleta hasta dejar la categoría bajo la flecha en `ms` (0 = sin animación). */
   function spinTo(categoryId, ms) {
-    const cats = config.categories;
+    const cats = modeOf(wheelMode).categories;
     const slice = 360 / cats.length;
     const i = Math.max(0, cats.findIndex((c) => c.id === categoryId));
     const jitter = (Math.random() - 0.5) * slice * 0.6; // no siempre en el centro exacto
@@ -110,7 +125,7 @@ window.TriviaUI = (() => {
     starting = true;
     renderPending();
     const amount = pending;
-    const res = await ctx.emit('trivia:start', { amount });
+    const res = await ctx.emit('trivia:start', { amount, mode });
     starting = false;
     if (!res.ok) {
       ctx.toast(res.error, 'error');
@@ -133,6 +148,7 @@ window.TriviaUI = (() => {
       $('#trivia').dataset.phase = next;
     }
     if (next === 'lobby') {
+      if (config) buildWheel(mode);
       $('#tv-spin').disabled = true;
       $('#tv-hint').textContent = 'Apuesta para empezar';
       renderSteps(null);
@@ -275,6 +291,7 @@ window.TriviaUI = (() => {
     renderOptions(r);
     renderFeedback(r);
 
+    buildWheel(r.mode); // p. ej. una partida de Tecnología empezada en otra pestaña
     const key = `${r.roundId}:${r.number}`;
     if (r.phase === 'spinning' && spunKey !== key) {
       spunKey = key;
@@ -370,7 +387,7 @@ window.TriviaUI = (() => {
         amount: end.payout,
         net: end.payout - end.bet,
         title: perfect ? '¡Perfecto!' : null,
-        detail: `Trivia · ${end.correct}/${end.total} aciertos · ${xLabel(end.multiplier)}`,
+        detail: `Trivia ${modeOf(end.mode).name} · ${end.correct}/${end.total} aciertos · ${xLabel(end.multiplier)}`,
         big: perfect,
       });
     } else {
@@ -384,10 +401,45 @@ window.TriviaUI = (() => {
     renderPending();
   }
 
+  /** Selector de modo de la pantalla de apuesta. */
+  function renderModes() {
+    $('#tv-modes').replaceChildren(
+      ...config.modes.map((m) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `tv-mode tv-mode-${m.id}`;
+        btn.setAttribute('role', 'radio');
+        btn.setAttribute('aria-checked', String(m.id === mode));
+        btn.classList.toggle('active', m.id === mode);
+        btn.innerHTML = `<i class="bi ${MODE_ICON[m.id] ?? 'bi-question-circle'}"></i><span class="tv-mode-name"></span><span class="tv-mode-desc"></span>`;
+        btn.querySelector('.tv-mode-name').textContent = m.name;
+        btn.querySelector('.tv-mode-desc').textContent = m.description;
+        btn.addEventListener('click', () => setMode(m.id));
+        return btn;
+      })
+    );
+    $('#tv-title-mode').textContent = modeOf(mode).name;
+  }
+
+  function setMode(id) {
+    mode = modeOf(id).id;
+    try {
+      localStorage.setItem(MODE_KEY, mode);
+    } catch {}
+    renderModes();
+    if (view !== 'game') buildWheel(mode);
+  }
+
   function onConfig(c) {
     const first = !config;
     config = c;
-    buildWheel();
+    let saved = null;
+    try {
+      saved = localStorage.getItem(MODE_KEY);
+    } catch {}
+    mode = modeOf(mode ?? saved ?? c.defaultMode).id;
+    renderModes();
+    buildWheel(round?.mode ?? mode);
     $('#tv-limits').textContent = `Mínimo ${fmt(c.min)} · máximo ${fmt(c.max)}`;
     if (first) {
       ctx.renderChips($('#tv-chips'), (v) => {

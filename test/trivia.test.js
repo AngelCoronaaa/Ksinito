@@ -25,7 +25,8 @@ const { QUESTION_IDS, QUESTIONS_BY_ID } = require('../src/trivia');
 test('banco: cada categoría tiene muchas preguntas con 4 opciones distintas y no vacías', () => {
   for (const { id } of CATEGORIES) {
     const all = [...BANK[id], ...(OPENTDB[id] ?? [])];
-    assert.ok(all.length >= 100, `pocas preguntas en ${id}: ${all.length}`);
+    const min = CATEGORIES.slice(0, 6).some((c) => c.id === id) ? 100 : 25; // clásica / tecnología
+    assert.ok(all.length >= min, `pocas preguntas en ${id}: ${all.length}`);
     for (const [text, ...answers] of all) {
       assert.ok(text.trim().endsWith('?'), text);
       assert.equal(answers.length, 4, text);

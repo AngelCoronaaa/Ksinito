@@ -257,7 +257,13 @@ fichas se desliza en horizontal.
 ## Trivia
 
 - Apuestas de **10 a 100.000** y respondes **8 preguntas**. Antes de cada una gira una ruleta con
-  seis categorías: ciencia, geografía, historia, cine, arte y deportes.
+  seis categorías, según el **modo** que elijas (se recuerda el último en ese navegador):
+  - **Clásica**: ciencia, geografía, historia, cine, arte y deportes.
+  - **Tecnología**: hardware, software, sistemas operativos, internet, programación y empresas
+    (unas 236 preguntas, entre 29 y 47 por categoría).
+
+  Los dos modos tienen los mismos pagos y límites. Cada partida guarda su modo en
+  `trivia_rounds.mode`.
 - Ficha **ALL-IN**: apuesta todo tu saldo de una vez (hasta el máximo de 100.000).
 - Al terminar cobras según los aciertos: **8/8 ×2,5**, **7/8 y 6/8 ×2**, **5/8 ×1,5** (redondeado
   hacia abajo); con menos de 5 pierdes lo apostado.

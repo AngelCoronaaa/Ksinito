@@ -1,7 +1,9 @@
 'use strict';
 
 // Minijuego "Trivia", individual: apuestas de MIN_BET a MAX_BET y respondes 8 preguntas. Antes
-// de cada una gira una ruleta de categorías (ciencia, geografía, historia, cine, arte y deportes).
+// de cada una gira una ruleta de categorías. Hay dos modos (MODES), cada uno con sus 6 categorías:
+// "Clásica" (ciencia, geografía, historia, cine, arte y deportes) y "Tecnología" (hardware,
+// software, sistemas operativos, internet, programación y empresas). Mismos pagos en los dos.
 // Al terminar se paga según los aciertos: 8/8 ×2,5, 7/8 y 6/8 ×2, 5/8 ×1,5; con menos se pierde lo apostado.
 //
 // El servidor decide todo: la categoría que sale, la pregunta y el orden de las opciones. La
@@ -35,17 +37,41 @@ const GRACE_MS = 800; // margen para respuestas enviadas justo al final (latenci
 const IDLE_MS = 30_000; // sin pulsar "Girar" en este tiempo, la ruleta gira sola
 const SEEN_OLDEST_SHARE = 0.25; // si ya vio todas, sale una del 25 % que vio hace más tiempo
 
-const CATEGORIES = [
-  { id: 'ciencia', name: 'Ciencia' },
-  { id: 'geografia', name: 'Geografía' },
-  { id: 'historia', name: 'Historia' },
-  { id: 'cine', name: 'Cine' },
-  { id: 'arte', name: 'Arte' },
-  { id: 'deportes', name: 'Deportes' },
+// Los ids de categoría son únicos entre todos los modos (forman parte del id de cada pregunta).
+const MODES = [
+  {
+    id: 'clasica',
+    name: 'Clásica',
+    description: 'Ciencia, geografía, historia, cine, arte y deportes',
+    categories: [
+      { id: 'ciencia', name: 'Ciencia' },
+      { id: 'geografia', name: 'Geografía' },
+      { id: 'historia', name: 'Historia' },
+      { id: 'cine', name: 'Cine' },
+      { id: 'arte', name: 'Arte' },
+      { id: 'deportes', name: 'Deportes' },
+    ],
+  },
+  {
+    id: 'tecnologia',
+    name: 'Tecnología',
+    description: 'Hardware, software, sistemas operativos, internet, programación y empresas',
+    categories: [
+      { id: 'hardware', name: 'Hardware' },
+      { id: 'software', name: 'Software' },
+      { id: 'sistemas', name: 'Sistemas' },
+      { id: 'internet', name: 'Internet' },
+      { id: 'programacion', name: 'Programación' },
+      { id: 'empresas', name: 'Empresas' },
+    ],
+  },
 ];
+const MODE_BY_ID = new Map(MODES.map((m) => [m.id, m]));
+const DEFAULT_MODE = 'clasica';
+const CATEGORIES = MODES.flatMap((m) => m.categories);
 
 const SQL = {
-  insert: "INSERT INTO trivia_rounds (user_id, bet, status, created_at) VALUES (?, ?, 'playing', ?)",
+  insert: "INSERT INTO trivia_rounds (user_id, bet, mode, status, created_at) VALUES (?, ?, ?, 'playing', ?)",
   settle: `
     UPDATE trivia_rounds SET status = 'settled', correct = ?, payout = ?, questions = ?, ended_at = ?
     WHERE id = ? AND user_id = ? AND status = 'playing'`,
@@ -114,10 +140,11 @@ function pickQuestion(categoryId, exclude = new Set(), seen = new Map()) {
 // ---------- partida (estado en memoria, sin base de datos ni temporizadores) ----------
 
 class TriviaRound {
-  constructor({ id, userId, bet, now = performance.now() }) {
+  constructor({ id, userId, bet, mode = DEFAULT_MODE, now = performance.now() }) {
     this.id = id;
     this.userId = userId;
     this.bet = bet;
+    this.mode = mode;
     this.phase = 'ready'; // ready → spinning → question → answered → spinning … → finished
     this.results = []; // { questionId, category, choice, correctIndex, correct, timedOut }
     this.current = null; // pregunta en juego: { id, category, text, options, correctIndex }
@@ -188,6 +215,7 @@ class TriviaRound {
     return {
       roundId: this.id,
       bet: this.bet,
+      mode: this.mode,
       total: QUESTIONS,
       phase: this.phase,
       number: this.results.length + (this.phase === 'spinning' || this.phase === 'question' ? 1 : 0),
@@ -254,7 +282,8 @@ function markSeen(userId, questionId) {
 }
 
 function doSpin(round) {
-  const category = CATEGORIES[crypto.randomInt(CATEGORIES.length)].id;
+  const { categories } = MODE_BY_ID.get(round.mode);
+  const category = categories[crypto.randomInt(categories.length)].id;
   const question = pickQuestion(category, round.askedIds(), seenCache.get(round.userId));
   round.spin(question, performance.now());
   markSeen(round.userId, question.id);
@@ -308,6 +337,7 @@ async function finish(round) {
   }
   send(round.userId, 'trivia:end', {
     roundId: round.id,
+    mode: round.mode,
     bet: round.bet,
     correct: round.correct,
     total: QUESTIONS,
@@ -317,19 +347,20 @@ async function finish(round) {
   });
 }
 
-/** `trivia:start { amount }`: cobra la apuesta y empieza la partida. */
-function start(userId, amount) {
+/** `trivia:start { amount, mode }`: cobra la apuesta y empieza la partida en ese modo. */
+function start(userId, amount, mode = DEFAULT_MODE) {
   assertInt(amount, MIN_BET, MAX_BET, 'La apuesta');
+  if (!MODE_BY_ID.has(mode)) throw new GameError('Modo de trivia no válido');
   return queueOf(userId).run(async () => {
     if (rounds.has(userId)) throw new GameError('Ya tienes una partida de trivia en juego');
     await loadSeen(userId); // antes de cobrar: si MySQL falla aquí, no se pierde la apuesta
     // La fila de la partida y el cobro van juntos: si no le alcanza, no queda nada guardado.
     const id = await db.transaction(async (tx) => {
-      const { insertId } = await tx.query(SQL.insert, [userId, amount, Date.now()]);
+      const { insertId } = await tx.query(SQL.insert, [userId, amount, mode, Date.now()]);
       if ((await wallet.bet(userId, amount, `trivia:bet:${insertId}`, tx)) === null) throw new GameError('Créditos insuficientes');
       return Number(insertId);
     });
-    const round = new TriviaRound({ id, userId, bet: amount });
+    const round = new TriviaRound({ id, userId, bet: amount, mode });
     rounds.set(userId, round);
     setTimer(round, IDLE_MS, () => doSpin(round));
     sendRound(round);
@@ -358,7 +389,8 @@ const config = {
   max: MAX_BET,
   questions: QUESTIONS,
   multipliers: MULTIPLIERS,
-  categories: CATEGORIES,
+  modes: MODES,
+  defaultMode: DEFAULT_MODE,
   answerMs: ANSWER_MS,
 };
 
@@ -396,6 +428,7 @@ module.exports = {
   multiplierFor,
   payoutFor,
   CATEGORIES,
+  MODES,
   QUESTIONS,
   ANSWER_MS,
   GRACE_MS,

@@ -155,6 +155,7 @@ CREATE TABLE IF NOT EXISTS trivia_rounds (
   id         BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,
   user_id    BIGINT UNSIGNED  NOT NULL,
   bet        BIGINT           NOT NULL,
+  mode       VARCHAR(16)      NOT NULL DEFAULT 'clasica', -- clasica | tecnologia
   status     VARCHAR(10)      NOT NULL,
   correct    TINYINT UNSIGNED NOT NULL DEFAULT 0,
   payout     BIGINT           NOT NULL DEFAULT 0,
