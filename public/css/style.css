@@ -2092,7 +2092,10 @@ button.chat-name:hover { text-decoration: underline; }
 .pf-mitico { --pf-flap: 11deg; --pf-flap-dur: 2.1s; }
 /* Sitios con poco espacio: alas más pequeñas. */
 .seat-plate .pf { --pf-k: .62; margin: 6px 0 2px; }
-.lb-podium .pf { --pf-k: .7; margin-top: 26px; } /* las alas y la corona no tapan la medalla */
+.lb-podium .pf { --pf-k: .7; margin: 26px 0 16px; } /* alas, corona o planetas no tapan la medalla ni el nombre */
+/* Filas del ranking: borde completo pero pequeño, con sitio a los lados para alas y adornos. */
+.lb-row .pf { --pf-k: .5; margin: 0 20px; }
+.lb-row:has(.pf) { padding-block: 14px; }
 @keyframes pfSpin { to { transform: rotate(360deg); } }
 @keyframes pfPulse { to { opacity: 1; } }
 @keyframes pfFlapR { from { transform: rotate(calc(var(--pf-flap) * .35)); } to { transform: rotate(calc(var(--pf-flap) * -1)); } }

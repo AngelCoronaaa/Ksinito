@@ -299,8 +299,8 @@ fichas se desliza en horizontal.
 ## Cosméticos
 
 - **Cosméticos** (en tu perfil: pulsa tu foto arriba y luego «Cosméticos»; «Volver» te regresa a donde estabas): bordes de perfil animados que se ven alrededor de tu foto en las mesas
-  de blackjack, el chat, el ranking y tu perfil (en el chat, la barra de arriba y las filas del
-  ranking solo el aro, porque los adornos no caben).
+  de blackjack, el chat, el ranking y tu perfil (en el chat y la barra de arriba solo el aro, porque los adornos no caben; en las filas del
+  ranking el borde completo, más pequeño).
 - Cuatro niveles, seis bordes en cada uno: tres con formas propias y tres con alas metálicas.
 
   | Nivel | Precio | Formas | Alas |

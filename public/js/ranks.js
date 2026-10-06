@@ -203,8 +203,8 @@ window.RankUI = (() => {
     name.className = 'lb-name';
     name.textContent = entry.username;
     name.title = `ID ${entry.publicId}`;
-    // En el podio caben las alas; en las filas, solo el aro.
-    wrap.append(ctx.avatar(entry.username, entry.avatar, size, entry.frame, { wings: size !== 'lb-avatar' }), name);
+    // Borde completo también en las filas (más pequeño; ver .lb-row .pf en style.css).
+    wrap.append(ctx.avatar(entry.username, entry.avatar, size, entry.frame), name);
     return wrap;
   }
 

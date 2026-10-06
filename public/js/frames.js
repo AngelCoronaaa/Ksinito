@@ -21,7 +21,7 @@ window.FramesUI = (() => {
     royal: ['#f6f9ff', '#8aa1c8', '#e1eaf8', '#465b84', '#b2c4e3'],
     arcane: ['#f7edff', '#8a5ec7', '#ddc6fc', '#46267a', '#ae87e5'],
     phoenix: ['#fff4c8', '#e06d18', '#ffd56e', '#96260a', '#ffa83a'],
-    obsidian: ['#8f7bb8', '#1b1622', '#4a3f63', '#050407', '#2c2538'],
+    obsidian: ['#b9a3e6', '#2a2238', '#6d5a96', '#0b0812', '#45395c'],
     seraph: ['#ffffff', '#e6d7aa', '#fffbf0', '#b3944b', '#f2e5c2'],
     crimson: ['#ffb4a8', '#8f1414', '#ff5a4a', '#3d0404', '#c42a22'],
     ice: ['#ffffff', '#bfe9ff', '#ecf9ff', '#5aa7e0', '#a8dcff'],
