@@ -23,7 +23,7 @@ const { SerialQueue } = require('./queue');
 const { GameError, assertInt } = require('./errors');
 
 const MIN_BET = 10;
-const MAX_BET = 100_000;
+const MAX_BET = 100_000; // el de la Clásica; cada modo tiene el suyo (`max` en MODES)
 const QUESTIONS = 8;
 const MULTIPLIERS = [
   { correct: 8, multiplier: 2.5 },
@@ -42,6 +42,7 @@ const MODES = [
   {
     id: 'clasica',
     name: 'Clásica',
+    max: MAX_BET,
     description: 'Ciencia, geografía, historia, cine, arte y deportes',
     categories: [
       { id: 'ciencia', name: 'Ciencia' },
@@ -55,6 +56,7 @@ const MODES = [
   {
     id: 'tecnologia',
     name: 'Tecnología',
+    max: 10_000,
     description: 'Hardware, software, sistemas operativos, internet, programación y empresas',
     categories: [
       { id: 'hardware', name: 'Hardware' },
@@ -349,8 +351,8 @@ async function finish(round) {
 
 /** `trivia:start { amount, mode }`: cobra la apuesta y empieza la partida en ese modo. */
 function start(userId, amount, mode = DEFAULT_MODE) {
-  assertInt(amount, MIN_BET, MAX_BET, 'La apuesta');
   if (!MODE_BY_ID.has(mode)) throw new GameError('Modo de trivia no válido');
+  assertInt(amount, MIN_BET, MODE_BY_ID.get(mode).max, 'La apuesta');
   return queueOf(userId).run(async () => {
     if (rounds.has(userId)) throw new GameError('Ya tienes una partida de trivia en juego');
     await loadSeen(userId); // antes de cobrar: si MySQL falla aquí, no se pierde la apuesta
@@ -386,7 +388,7 @@ function resume(userId) {
 /** Límites y reglas para la pantalla de inicio (se envía al conectarse). */
 const config = {
   min: MIN_BET,
-  max: MAX_BET,
+  max: Math.max(...MODES.map((m) => m.max)), // el máximo de cada modo va en `modes`
   questions: QUESTIONS,
   multipliers: MULTIPLIERS,
   modes: MODES,

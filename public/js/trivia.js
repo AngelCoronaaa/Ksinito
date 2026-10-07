@@ -47,6 +47,7 @@ window.TriviaUI = (() => {
 
   const fmt = (n) => n.toLocaleString('es');
   const modeOf = (id) => config.modes.find((m) => m.id === id) ?? config.modes[0];
+  const maxBet = () => modeOf(mode).max ?? config.max; // límite del modo elegido
   const nameOf = (id) => config?.modes.flatMap((m) => m.categories).find((c) => c.id === id)?.name ?? id;
   const xLabel = (m) => `×${m.toLocaleString('es')}`;
 
@@ -397,7 +398,7 @@ window.TriviaUI = (() => {
     }
     round = null;
     lastBet = end.bet;
-    pending = lastBet;
+    pending = Math.min(lastBet, maxBet());
     renderPending();
   }
 
@@ -419,6 +420,7 @@ window.TriviaUI = (() => {
       })
     );
     $('#tv-title-mode').textContent = modeOf(mode).name;
+    $('#tv-limits').textContent = `Mínimo ${fmt(config.min)} · máximo ${fmt(maxBet())}`;
   }
 
   function setMode(id) {
@@ -428,6 +430,10 @@ window.TriviaUI = (() => {
     } catch {}
     renderModes();
     if (view !== 'game') buildWheel(mode);
+    // Al pasar a un modo con límite menor, la apuesta preparada se ajusta.
+    if (pending > maxBet()) pending = maxBet();
+    if (lastBet > maxBet()) lastBet = maxBet();
+    renderPending();
   }
 
   function onConfig(c) {
@@ -440,10 +446,9 @@ window.TriviaUI = (() => {
     mode = modeOf(mode ?? saved ?? c.defaultMode).id;
     renderModes();
     buildWheel(round?.mode ?? mode);
-    $('#tv-limits').textContent = `Mínimo ${fmt(c.min)} · máximo ${fmt(c.max)}`;
     if (first) {
       ctx.renderChips($('#tv-chips'), (v) => {
-        pending = Math.min(config.max, pending + v);
+        pending = Math.min(maxBet(), pending + v);
         renderPending();
       }, false, c.min);
       // All-in: todo el saldo, hasta el máximo de la trivia.
@@ -453,7 +458,7 @@ window.TriviaUI = (() => {
       allIn.textContent = 'ALL-IN';
       allIn.setAttribute('aria-label', 'Apostar todo tu saldo');
       allIn.addEventListener('click', () => {
-        const all = Math.min(config.max, ctx.credits() ?? 0);
+        const all = Math.min(maxBet(), ctx.credits() ?? 0);
         if (all < config.min) {
           ctx.toast(`Necesitas al menos ${fmt(config.min)} créditos para jugar`, 'error');
           return;

@@ -262,7 +262,8 @@ fichas se desliza en horizontal.
   - **Tecnología**: hardware, software, sistemas operativos, internet, programación y empresas
     (unas 236 preguntas, entre 29 y 47 por categoría).
 
-  Los dos modos tienen los mismos pagos y límites. Cada partida guarda su modo en
+  Los dos modos tienen los mismos pagos; la apuesta máxima es de **100.000 en Clásica** y de
+  **10.000 en Tecnología** (`max` de cada modo en `MODES`, `src/trivia.js`). Cada partida guarda su modo en
   `trivia_rounds.mode`.
 - Ficha **ALL-IN**: apuesta todo tu saldo de una vez (hasta el máximo de 100.000).
 - Al terminar cobras según los aciertos: **8/8 ×2,5**, **7/8 y 6/8 ×2**, **5/8 ×1,5** (redondeado

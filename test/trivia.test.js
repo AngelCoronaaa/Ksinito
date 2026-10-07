@@ -127,3 +127,10 @@ test('no se puede responder dos veces ni sin pregunta', () => {
   assert.throws(() => round.answer(0, 4_100));
   assert.throws(() => round.ask(4_200) ?? round.answer(0, 4_300));
 });
+
+test('límite de apuesta por modo: Clásica 100.000, Tecnología 10.000', () => {
+  const { MODES, config } = require('../src/trivia');
+  const max = Object.fromEntries(MODES.map((m) => [m.id, m.max]));
+  assert.deepEqual(max, { clasica: 100_000, tecnologia: 10_000 });
+  assert.equal(config.min, 10);
+});
