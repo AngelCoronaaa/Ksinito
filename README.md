@@ -246,7 +246,7 @@ fichas se desliza en horizontal.
   Tienen su propio chat. Cada jugador puede tener una sala abierta a la vez; se cierra sola tras
   2 minutos sin nadie sentado ni mirando (y su chat se borra). Viven en memoria: un reinicio del
   servidor las cierra.
-- Apuesta máxima **200.000 por mano** (doblar y dividir cobran otro tanto).
+- Apuesta máxima **2.000.000 por mano** (doblar y dividir cobran otro tanto).
 - 8 barajas, el crupier se planta en 17, blackjack paga 3:2, doblar con dos cartas y
   dividir una vez.
 - La mano se reparte cuando todos los sentados apostaron o 15 s después de la primera
